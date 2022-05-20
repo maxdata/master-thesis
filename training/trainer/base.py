@@ -30,7 +30,6 @@ class BaseTrainer(ABC):
         val_loader: Optional[DataLoader] = None,
         validate_per_steps: int = -1,
         metrics: Optional[Dict[str, Callable]] = None,
-        instance_metrics: Optional[Dict[str, Callable]] = None,
         device: Optional[str] = None,
         learning_rate: Optional[float] = 5e-5,
         optimizer: str = 'adamw',
@@ -42,7 +41,6 @@ class BaseTrainer(ABC):
         self.val_loader = val_loader
         self.validate_per_steps = validate_per_steps
         self.metrics = metrics or {}
-        self.instance_metrics = instance_metrics or {}
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.learning_rate = learning_rate
         self.optimizer_name = optimizer
@@ -135,7 +133,7 @@ class BaseTrainer(ABC):
             callback.on_step_end(step_num, loss)
 
     def on_validation_end(self, step_num, metrics, total_steps):
-        formatted = ', '.join(f'val_{metric}: {value:.2f}' for metric, value in metrics.items())
+        formatted = ', '.join(f'val/{metric}: {value:.2f}' for metric, value in metrics.items())
         num = str(step_num).rjust(len(str(total_steps)))
 
         tqdm.write(f'[Step {num}] {formatted}')
@@ -147,13 +145,11 @@ class BaseTrainer(ABC):
     def train_step(self, batch):
         raise NotImplementedError
 
-    def evaluate(self, dataloader: DataLoader, mode: str = 'agg', label: Optional[str] = None):
-        if mode not in ('agg', 'full'):
-            raise ValueError('Evaluation mode must be one of ("agg", "full")')
-
+    def evaluate(self, dataloader: DataLoader, report_instances: bool = False,
+                 report_documents: bool = False, label: Optional[str] = None):
         self.model.eval()
 
-        agg_metrics = defaultdict(list)
+        losses = []
         full_results = []
 
         if label is None:
@@ -164,46 +160,60 @@ class BaseTrainer(ABC):
         for batch in iterator:
             loss, predictions, scores = self.evaluate_step(batch)
 
-            agg_metrics['loss'].append(loss)
+            losses.append(loss)
+
+            instance_data = {
+                'doc_id': batch.docs,
+                'feature': batch.features,
+                'context': batch.inputs,
+                'expected': batch.targets,
+                'predicted': predictions,
+                'score': scores,
+            }
 
             for metric_name, metric_fct in self.metrics.items():
-                agg_metrics[metric_name].append(metric_fct(batch.targets, predictions))
+                instance_data[metric_name] = [metric_fct(a_true, a_pred)
+                                              for a_true, a_pred
+                                              in zip(batch.targets, predictions)]
 
-            if mode == 'full':
-                instance_data = {
-                    'doc_id': batch.docs,
-                    'feature': batch.features,
-                    'context': batch.inputs,
-                    'expected': batch.targets,
-                    'predicted': predictions,
-                    'score': scores,
-                }
+            full_results.append(pd.DataFrame(instance_data))
 
-                for metric_name, metric_fct in self.instance_metrics.items():
-                    instance_data[metric_name] = [metric_fct(a_true, a_pred)
-                                                  for a_true, a_pred
-                                                  in zip(batch.targets, predictions)]
-
-                full_results.append(pd.DataFrame(instance_data))
+        instances = pd.concat(full_results, ignore_index=True)
+        documents = self.segments_to_documents(instances)
 
         self.model.train()
 
-        for metric_name, metric_values in agg_metrics.items():
-            agg_metrics[metric_name] = np.mean(metric_values)
+        agg_metrics = {
+            'loss': np.mean(losses),
+        }
+        for metric_name in self.metrics:
+            agg_metrics[f'instance/{metric_name}'] = instances[metric_name].mean()
+            agg_metrics[f'document/{metric_name}'] = documents[metric_name].mean()
 
-        if mode == 'agg':
+            for feature in instances['feature'].unique():
+                agg_metrics[f'document/{feature}/{metric_name}'] = documents[f'{feature}/{metric_name}'].mean()
+
+        if not report_instances and not report_documents:
             return agg_metrics
-        else:
-            return {
-                'agg': agg_metrics,
-                'instances': pd.concat(full_results, ignore_index=True),
-            }
+
+        results = {
+            'agg': agg_metrics
+        }
+
+        if report_instances:
+            results['instances'] = instances
+
+        if report_documents:
+            results['documents'] = documents
+
+        return results
 
     def perform_evaluation(self, **loaders: DataLoader):
         results = {}
 
         for key, loader in loaders.items():
-            results[key] = self.evaluate(loader, mode='full', label=f'Evaluating "{key}"')
+            results[key] = self.evaluate(loader, report_instances=True, report_documents=True,
+                                         label=f'Evaluating "{key}"')
 
         for callback in self.callbacks:
             callback.on_evaluation_end(results)
@@ -215,29 +225,32 @@ class BaseTrainer(ABC):
         """Performs evaluation for a single batch. Returns the loss, a list of predictions, and a list of scores"""
         raise NotImplementedError
 
-    def process_documents(self, loader: DataLoader, metric: str = 'score'):
-        agg_functions = {
-            'count': lambda df: max(Counter(df['predicted'])),
-            'score': lambda df: df.loc[df['score'].idxmax()]['predicted'],
-        }
-
-        if metric not in agg_functions:
-            raise ValueError(f'Aggregation metric `{metric}` not supported')
-
-        result: Dict[str, pd.DataFrame] = self.evaluate(loader, mode='full', label=f'Evaluating document')
-
-        instances = result['instances']
+    def segments_to_documents(self, instances: pd.DataFrame) -> pd.DataFrame:
         instances = instances[~((instances['predicted'] == '') | pd.isnull(instances['predicted']))]
 
-        results = {}
+        results = []
 
         for doc_id, doc_instances in instances.groupby('doc_id'):
-            results[doc_id] = {
-                feature: agg_functions[metric](doc_instances[doc_instances['feature'] == feature])
-                for feature in doc_instances['feature'].unique()
-            }
+            doc_predictions = {'doc_id': doc_id}
 
-        return results
+            scores = defaultdict(list)
+
+            for feature, predictions in doc_instances.groupby('feature'):
+                best_prediction = predictions.loc[predictions['score'].idxmax()]
+
+                doc_predictions[feature] = best_prediction['predicted']
+                doc_predictions[f'{feature}/score'] = best_prediction['score']
+
+                for metric_name in self.metrics:
+                    doc_predictions[f'{feature}/{metric_name}'] = best_prediction[metric_name]
+                    scores[metric_name].append(best_prediction[metric_name])
+
+            for metric_name, metric_scores in scores.items():
+                doc_predictions[metric_name] = np.mean(metric_scores)
+
+            results.append(doc_predictions)
+
+        return pd.DataFrame(results)
 
     def stop(self):
         self.is_training = False

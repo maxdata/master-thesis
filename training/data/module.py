@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Iterator, List, Optional, Union
 
 import torch
-from torch.utils.data import DataLoader, Dataset, Sampler
+from torch.utils.data import DataLoader, Dataset, RandomSampler, Sampler
 from transformers import BertTokenizerFast, T5TokenizerFast
 
 from data.base import BaseDataset
@@ -58,12 +58,13 @@ class SWDEDataModule:
                 remove_null=self.remove_null,
             )
 
-    def train_dataloader(self, sample: bool = True):
-        if not sample:
-            # Running evaluation on the training data, so we don't want random sampling
-            sampler = None
-        else:
+    def train_dataloader(self, size: Optional[int] = None):
+        if size is None:
+            # Run training on infinite dataloader
             sampler = SWDESampler(self.data_train, replacement=True, remove_null=self.remove_null)
+        else:
+            # Evaluate model on training set using subset of the data
+            sampler = RandomSampler(self.data_train, num_samples=size)
 
         return self._data_loader(self.data_train, sampler)
 

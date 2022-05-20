@@ -1,0 +1,47 @@
+program: train.py
+method: grid
+name: full-document-all-verticals
+project: information_extraction
+description: Runs the BERT and T5 models on each of the domains in the SWDE dataset and reports full document results
+
+parameters:
+  run_name:
+    value: "{model}-{vertical}"
+  model:
+    values:
+    - bert
+    - t5
+  vertical:
+    values:
+    - auto
+    - book
+    - camera
+    - job
+    - movie
+    - nbaplayer
+    - restaurant
+    - university
+  representation:
+    value: html
+  remove_null:
+    value: false
+  context_size:
+    value: 256
+  monitor_metric:
+    value: em
+  learning_rate:
+    value: 0.00005
+  optimizer:
+    value: adamw
+  batch_size:
+    value: 64
+  num_steps:
+    value: 30000
+  validation_interval:
+    value: 1000
+  validation_batches:
+    value: 150
+  early_stopping_patience:
+    value: 10
+  num_workers:
+    value: 16

@@ -73,10 +73,6 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
         'val_loader': dataset.val_dataloader(size=config.validation_batches * config.batch_size),
         'validate_per_steps': config.validation_interval,
         'metrics': {
-            'f1': f1_metric,
-            'em': em_metric,
-        },
-        'instance_metrics': {
             'f1': compute_f1,
             'em': compute_exact,
         },
@@ -89,15 +85,6 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
 
     return model_config['trainer_class'](model_config['model_version'],
                                          **trainer_kwargs)
-
-
-def predict_test_documents(dataset: SWDEDataModule, trainer: BaseTrainer) -> pd.DataFrame:
-    predictions = trainer.process_documents(dataset.test_dataloader())
-
-    for doc_id, preds in predictions.items():
-        preds['doc_id'] = doc_id
-
-    return pd.DataFrame(list(predictions.values()))
 
 
 def main():
@@ -114,18 +101,16 @@ def main():
         trainer.train(config.num_steps, config.batch_size)
 
         eval_loaders = {
-            'train': lambda: dataset.train_dataloader(sample=False),
+            'train': lambda: dataset.train_dataloader(size=len(dataset.data_val)),
             'val': lambda: dataset.val_dataloader(),
             'test': lambda: dataset.test_dataloader(),
         }
 
         trainer.perform_evaluation(**{
             dataset: eval_loaders[dataset]()
-            for dataset in config.evaluation_datasets
+            for dataset in config.get('evaluation_datasets',
+                                      ['train', 'val', 'test'])
         })
-
-        predictions = predict_test_documents(dataset, trainer)
-        predictions.to_csv(f'predictions-{run_name}.csv', index=False)
 
     wandb.finish()
 

@@ -42,7 +42,13 @@ class WandbCallback(BaseCallback):
             for metric_name, metric_value in split_data['agg'].items():
                 summary_dict[f'{split_name}/{metric_name}'] = metric_value
 
-            tables[f'instances/{split_name}'] = wandb.Table(dataframe=split_data['instances'])
+            if 'instances' in split_data:
+                tables[f'instances/{split_name}'] = wandb.Table(dataframe=split_data['instances'])
 
-        wandb.log(tables)
+            if 'documents' in split_data:
+                tables[f'documents/{split_name}'] = wandb.Table(dataframe=split_data['documents'])
+
+        if tables:
+            wandb.log(tables)
+
         wandb.summary.update(summary_dict)
