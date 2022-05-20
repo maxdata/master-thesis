@@ -47,9 +47,9 @@ def get_dataset(config: wandb.Config) -> SWDEDataModule:
 
     dataset = SWDEDataModule(MODELS[config.model]['model_version'],
                              max_length=config.context_size,
-                             train_files=train_files,
-                             val_files=val_files,
-                             test_files=test_files,
+                             train_files=[train_files[0]],
+                             val_files=[val_files[0]],
+                             test_files=[test_files[0]],
                              batch_size=mini_batch_sizes[config.model],
                              num_workers=config.num_workers,
                              remove_null=config.remove_null)
