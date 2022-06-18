@@ -8,6 +8,8 @@ context_size:
   value: 256
 vertical:
   value: nbaplayer
+website:
+  value: espn
 remove_null:
   value: false
 monitor_metric:
@@ -19,11 +21,13 @@ optimizer:
 batch_size:
   value: 64
 num_steps:
-  value: 25000
-validation_interval:
   value: 1000
+validation_interval:
+  value: 100
+validation_documents:
+  value: 10
 validation_batches:
-  value: 150
+  value: 50
 early_stopping_patience:
   value: 10
 num_workers:

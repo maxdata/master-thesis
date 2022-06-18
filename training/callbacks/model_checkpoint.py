@@ -5,6 +5,7 @@ import torch
 from tqdm import tqdm
 
 from callbacks.base import BaseCallback
+from outputs import EvaluationResult
 
 
 class ModelCheckpoint(BaseCallback):
@@ -22,8 +23,8 @@ class ModelCheckpoint(BaseCallback):
 
         self.best_score = None
 
-    def on_validation_end(self, step_num: int, metrics: Dict[str, float]):
-        new_score = metrics[self.metric]
+    def on_validation_end(self, step_num: int, results: EvaluationResult):
+        new_score = results.metrics[self.metric]
 
         if (self.best_score is None or
                 (new_score < self.best_score and self.mode == 'min') or

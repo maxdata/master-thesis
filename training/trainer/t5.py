@@ -4,10 +4,11 @@ from typing import Iterable, Optional, Tuple
 from transformers import T5Tokenizer, T5ForConditionalGeneration, LogitsProcessor, LogitsProcessorList
 
 import torch
-from torch.nn import functional as F
 from torch.nn import CrossEntropyLoss
+from torch.utils.data import DataLoader
 
 from data.t5 import T5Batch
+from outputs import DocumentPrediction, SegmentPrediction
 from trainer.base import BaseTrainer
 
 
@@ -49,7 +50,7 @@ class T5Trainer(BaseTrainer):
 
         return loss
 
-    def evaluate_step(self, batch: T5Batch) -> Tuple[float, Iterable[str], Iterable[float]]:
+    def predict_segment_batch(self, batch: T5Batch) -> Tuple[float, SegmentPrediction]:
         with torch.no_grad():
             if any(batch.targets):
                 loss = float(self.train_step(batch))
@@ -71,7 +72,45 @@ class T5Trainer(BaseTrainer):
 
         predictions = self.tokenizer.batch_decode(outputs.sequences, skip_special_tokens=True)
 
-        return loss, predictions, scores
+        return loss, SegmentPrediction(batch, predictions, scores)
+
+    def predict_document_batch(self, loaders: Iterable[Tuple[str, DataLoader]],
+                               method: str = 'greedy') -> DocumentPrediction:
+        attribute_predictions = {}
+        segments = []
+        for attribute, dataloader in loaders:
+            doc_predictions, doc_scores = [], []
+
+            for batch in dataloader:
+                # TODO: if we want to do end-to-end training, we do need the gradients
+                with torch.no_grad():
+                    outputs = self.forward(batch)
+
+                    scores = outputs.sequences_scores.tolist()
+
+                predictions = self.tokenizer.batch_decode(outputs.sequences, skip_special_tokens=True)
+
+                doc_predictions.extend(predictions)
+                doc_scores.extend(scores)
+
+                segments.append(SegmentPrediction(batch, predictions, scores))
+
+            if method == 'greedy':
+                # TODO: this code can be split into separate function to reduce duplication.
+                if any(doc_predictions):
+                    best_index = max((i for i, pred in enumerate(doc_predictions) if pred), key=lambda i: doc_scores[i])
+                else:
+                    best_index = min(range(len(doc_scores)), key=lambda i: doc_scores[i])
+                    doc_scores[best_index] = 1 - doc_scores[best_index]
+
+                attribute_predictions[attribute] = {
+                    'prediction': doc_predictions[best_index],
+                    'confidence': doc_scores[best_index],
+                }
+            else:
+                raise ValueError(f'Prediction method `{method} does not exist!`')
+
+        return DocumentPrediction(attribute_predictions, segments)
 
 
 class CopyInputLogitsProcessor(LogitsProcessor):

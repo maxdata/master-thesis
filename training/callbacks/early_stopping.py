@@ -1,8 +1,7 @@
-from typing import Dict
-
 from tqdm import tqdm
 
 from callbacks.base import BaseCallback
+from outputs import EvaluationResult
 
 
 class EarlyStopping(BaseCallback):
@@ -17,8 +16,8 @@ class EarlyStopping(BaseCallback):
         self.best_score = None
         self.steps_since_improve = 0
 
-    def on_validation_end(self, step_num: int, metrics: Dict[str, float]):
-        new_score = metrics[self.metric]
+    def on_validation_end(self, step_num: int, results: EvaluationResult):
+        new_score = results.metrics[self.metric]
 
         if (self.best_score is None or
                 (new_score < self.best_score and self.mode == 'min') or

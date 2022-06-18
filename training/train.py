@@ -2,8 +2,10 @@ from pathlib import Path
 
 import wandb
 
-from callbacks import EarlyStopping, ModelCheckpoint, SavePredictions, WandbCallback
+from callbacks import EarlyStopping, ModelCheckpoint, SavePredictions, ValidationCallback, WandbCallback
+from data.ground_truths import GroundTruths
 from data.module import SWDEDataModule
+from evaluation import Evaluator
 from metrics import compute_f1, compute_exact
 from trainer import BertTrainer, T5Trainer
 
@@ -31,9 +33,10 @@ def get_dataset(config: wandb.Config) -> SWDEDataModule:
     input_artifact = wandb.use_artifact(f'swde-{representation}:{tag}')
     input_artifact.download(str(data_path))
 
-    train_files = list(data_path.glob(f'train/{config.vertical}/*/*-{config.context_size}.csv'))
-    val_files = list(data_path.glob(f'val/{config.vertical}/*/*-{config.context_size}.csv'))
-    test_files = list(data_path.glob(f'test/{config.vertical}/*/*-{config.context_size}.csv'))
+    website = config.get('website', '*')
+    train_files = list(data_path.glob(f'train/{config.vertical}/{website}/*-{config.context_size}.csv'))
+    val_files = list(data_path.glob(f'val/{config.vertical}/{website}/*-{config.context_size}.csv'))
+    test_files = list(data_path.glob(f'test/{config.vertical}/{website}/*-{config.context_size}.csv'))
 
     print('Files used for training:', len([str(f) for f in train_files]))
     print('Files used for validation:', len([str(f) for f in val_files]))
@@ -65,17 +68,11 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
         WandbCallback('information_extraction', run_name, do_init=False),
         EarlyStopping(patience=config.early_stopping_patience,
                       metric=config.monitor_metric, mode=monitor_mode),
-        SavePredictions(documents_dir=f'results/{run_name}', instances_dir=f'results/{run_name}'),
+        SavePredictions(documents_dir=f'results/{run_name}', segments_dir=f'results/{run_name}'),
     ]
 
     trainer_kwargs = {
         'train_loader': dataset.train_dataloader(),
-        'val_loader': dataset.val_dataloader(size=config.validation_batches * config.batch_size),
-        'validate_per_steps': config.validation_interval,
-        'metrics': {
-            'f1': compute_f1,
-            'em': compute_exact,
-        },
         'learning_rate': config.learning_rate,
         'optimizer': config.optimizer,
         'callbacks': callbacks,
@@ -84,8 +81,26 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
 
     model_config = MODELS[config.model]
 
-    return model_config['trainer_class'](model_config['model_version'],
-                                         **trainer_kwargs)
+    trainer = model_config['trainer_class'](model_config['model_version'],
+                                            **trainer_kwargs)
+
+    ground_truths = GroundTruths(Path('~/Data/SWDE/groundtruth/').expanduser())
+    evaluator = Evaluator(trainer, metrics={'f1': compute_f1, 'em': compute_exact}, ground_truths=ground_truths)
+
+    if 'validation_documents' in config:
+        val_callback = ValidationCallback(evaluator, config.validation_interval,
+                                          document_loader=dataset.val_document_dataloaders(config.validation_documents),
+                                          label='Validating')
+        trainer.callbacks.append(val_callback)
+    elif 'validation_batches' in config:
+        val_callback = ValidationCallback(evaluator, config.validation_interval,
+                                          segment_loader=dataset.val_dataloader(
+                                              size=config.validation_batches * config.batch_size
+                                          ),
+                                          label='Validating')
+        trainer.callbacks.append(val_callback)
+
+    return trainer
 
 
 def main():
@@ -102,16 +117,19 @@ def main():
         trainer.train(config.num_steps, config.batch_size)
 
         eval_loaders = {
-            'train': lambda: dataset.train_dataloader(size=len(dataset.data_val)),
-            'val': lambda: dataset.val_dataloader(),
-            'test': lambda: dataset.test_dataloader(),
+            'train': lambda: dataset.train_document_dataloaders(num_documents=10000),
+            'val': lambda: dataset.val_document_dataloaders(),
+            'test': lambda: dataset.test_document_dataloaders(),
         }
 
-        trainer.perform_evaluation(**{
-            dataset: eval_loaders[dataset]()
-            for dataset in config.get('evaluation_datasets',
-                                      ['train', 'val', 'test'])
-        })
+        ground_truths = GroundTruths(Path('~/Data/SWDE/groundtruth/').expanduser())
+        evaluator = Evaluator(trainer, metrics={'f1': compute_f1, 'em': compute_exact}, ground_truths=ground_truths)
+
+        for dataset in config.get('evaluation_datasets', ['train', 'val', 'test']):
+            results = evaluator.evaluate_documents(eval_loaders[dataset](), label=f'Evaluating {dataset}')
+
+            for callback in trainer.callbacks:
+                callback.on_evaluation_end(dataset, results)
 
     wandb.finish()
 

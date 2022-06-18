@@ -1,9 +1,10 @@
 import json
 import os
 import sys
-from typing import Dict, Optional
+from typing import Optional
 
 from callbacks.base import BaseCallback
+from outputs import EvaluationResult
 
 
 class LoggingCallback(BaseCallback):
@@ -25,11 +26,11 @@ class LoggingCallback(BaseCallback):
             json.dump({'step_num': step_num, 'loss': loss}, _file)
             _file.write('\n')
 
-    def on_validation_end(self, step_num: int, metrics: Dict[str, float]):
+    def on_validation_end(self, step_num: int, results: EvaluationResult):
         if self.val_log is None:
             return
 
-        to_log = {'step_num': step_num, **metrics}
+        to_log = {'step_num': step_num, **results.metrics}
         with open(self.val_log, 'a') as _file:
             json.dump(to_log, _file)
             _file.write('\n')

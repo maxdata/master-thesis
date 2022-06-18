@@ -1,8 +1,9 @@
-from typing import Dict, Optional
+from typing import Optional
 
 import wandb
 
 from callbacks.base import BaseCallback
+from outputs import EvaluationResult
 
 
 class WandbCallback(BaseCallback):
@@ -31,22 +32,21 @@ class WandbCallback(BaseCallback):
     def on_step_end(self, step_num: int, loss: float):
         wandb.log({'train/loss': loss}, step=step_num)
 
-    def on_validation_end(self, step_num: int, metrics: Dict[str, float]):
-        wandb.log({f'val/{key}': value for key, value in metrics.items()}, step=step_num)
+    def on_validation_end(self, step_num: int, results: EvaluationResult):
+        wandb.log({f'val/{key}': value for key, value in results.metrics.items()}, step=step_num)
 
-    def on_evaluation_end(self, results: dict):
+    def on_evaluation_end(self, identifier: str, results: EvaluationResult):
         summary_dict = {}
         tables = {}
 
-        for split_name, split_data in results.items():
-            for metric_name, metric_value in split_data['agg'].items():
-                summary_dict[f'{split_name}/{metric_name}'] = metric_value
+        for metric_name, metric_value in results.metrics.items():
+            summary_dict[f'{identifier}/{metric_name}'] = metric_value
 
-            if 'instances' in split_data:
-                tables[f'instances/{split_name}'] = wandb.Table(dataframe=split_data['instances'])
+        if results.segments is not None:
+            tables[f'segments/{identifier}'] = wandb.Table(dataframe=results.segments)
 
-            if 'documents' in split_data:
-                tables[f'documents/{split_name}'] = wandb.Table(dataframe=split_data['documents'])
+        if results.documents is not None:
+            tables[f'documents/{identifier}'] = wandb.Table(dataframe=results.documents)
 
         if tables:
             wandb.log(tables)

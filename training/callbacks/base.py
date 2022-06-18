@@ -1,4 +1,4 @@
-from typing import Dict
+from outputs import EvaluationResult
 
 
 class BaseCallback:
@@ -19,8 +19,8 @@ class BaseCallback:
     def on_step_end(self, step_num: int, loss: float):
         pass
 
-    def on_validation_end(self, step_num: int, metrics: Dict[str, float]):
+    def on_validation_end(self, step_num: int, results: EvaluationResult):
         pass
 
-    def on_evaluation_end(self, results: dict):
+    def on_evaluation_end(self, identifier: str, results: EvaluationResult):
         pass
