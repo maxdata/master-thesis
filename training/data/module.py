@@ -79,7 +79,7 @@ class SWDEDataModule:
     def test_dataloader(self):
         return self._segment_loader(self.data_test)
 
-    def train_document_dataloaders(self, num_documents: Optional[int] = None):
+    def train_document_dataloader(self, num_documents: Optional[int] = None):
         if num_documents is None:
             sampler = DocumentSampler(self.data_train, shuffle=True, replacement=True, batch_size=self.batch_size)
         else:
@@ -87,12 +87,12 @@ class SWDEDataModule:
 
         return self._data_loader(self.data_train, sampler)
 
-    def val_document_dataloaders(self, num_documents: Optional[int] = None):
+    def val_document_dataloader(self, num_documents: Optional[int] = None):
         sampler = DocumentSampler(self.data_train, num_documents=num_documents, batch_size=self.batch_size)
 
         return self._data_loader(self.data_val, sampler)
 
-    def test_document_dataloaders(self):
+    def test_document_dataloader(self):
         sampler = DocumentSampler(self.data_train, batch_size=self.batch_size)
 
         return self._data_loader(self.data_test, sampler)

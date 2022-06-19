@@ -152,7 +152,7 @@ class BaseTrainer(ABC):
                 document_segments = []
                 current_document = new_document
 
-            segment_prediction = self.predict_segment_batch(batch)
+            _, segment_prediction = self.predict_segment_batch(batch)
             segments.append(segment_prediction)
             document_segments.append(segment_prediction)
 
@@ -169,7 +169,7 @@ class BaseTrainer(ABC):
 
         for segment in segments:
             predictions.extend(segment.predictions)
-            scores.extend(scores)
+            scores.extend(segment.scores)
 
         if method == 'greedy':
             if any(predictions):

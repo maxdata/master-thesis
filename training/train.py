@@ -89,7 +89,7 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
 
     if 'validation_documents' in config:
         val_callback = ValidationCallback(evaluator, config.validation_interval,
-                                          document_loader=dataset.val_document_dataloaders(config.validation_documents),
+                                          document_loader=dataset.val_document_dataloader(config.validation_documents),
                                           label='Validating')
         trainer.callbacks.append(val_callback)
     elif 'validation_batches' in config:
@@ -117,19 +117,19 @@ def main():
         trainer.train(config.num_steps, config.batch_size)
 
         eval_loaders = {
-            'train': lambda: dataset.train_document_dataloaders(num_documents=10000),
-            'val': lambda: dataset.val_document_dataloaders(),
-            'test': lambda: dataset.test_document_dataloaders(),
+            'train': lambda: dataset.train_document_dataloader(num_documents=10000),
+            'val': lambda: dataset.val_document_dataloader(),
+            'test': lambda: dataset.test_document_dataloader(),
         }
 
         ground_truths = GroundTruths(Path('~/Data/SWDE/groundtruth/').expanduser())
         evaluator = Evaluator(trainer, metrics={'f1': compute_f1, 'em': compute_exact}, ground_truths=ground_truths)
 
-        for dataset in config.get('evaluation_datasets', ['train', 'val', 'test']):
-            results = evaluator.evaluate_documents(eval_loaders[dataset](), label=f'Evaluating {dataset}')
+        for split in config.get('evaluation_datasets', ['train', 'val', 'test']):
+            results = evaluator.evaluate_documents(eval_loaders[split](), label=f'Evaluating {split}')
 
             for callback in trainer.callbacks:
-                callback.on_evaluation_end(dataset, results)
+                callback.on_evaluation_end(split, results)
 
     wandb.finish()
 
