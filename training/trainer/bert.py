@@ -57,8 +57,12 @@ class BertTrainer(BaseTrainer):
             scores, spans = self.extract_spans(batch, outputs)
 
         predictions = self.spans_to_predictions(batch, spans)
+        embeddings = [
+            outputs.hidden_states[-1][i, start:end + 1]
+            for i, (start, end) in enumerate(spans)
+        ]
 
-        return float(outputs.loss), SegmentPrediction(batch, predictions, scores)
+        return float(outputs.loss), SegmentPrediction(batch, predictions, scores, embeddings)
 
     def predict_document_batch(self, loaders: Iterable[Tuple[str, DataLoader[BertBatch]]],
                                method: str = 'greedy') -> DocumentPrediction:

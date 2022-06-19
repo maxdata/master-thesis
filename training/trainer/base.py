@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
@@ -133,6 +134,57 @@ class BaseTrainer(ABC):
                                method: str = 'greedy') -> DocumentPrediction:
         """Evaluates a single document. Returns, for each attribute, the prediction and confidence."""
         raise NotImplementedError
+
+    def predict_documents(self, dataloader: DataLoader, method: str = 'greedy') -> DocumentPrediction:
+        documents = defaultdict(dict)
+        segments = []
+
+        document_segments = []
+        current_document = None
+
+        for batch in dataloader:
+            new_document = batch.docs[0], batch.features[0]
+
+            if current_document != new_document:
+                if current_document is not None and document_segments:
+                    doc_id, attribute = current_document
+                    documents[doc_id][attribute] = self.segments_to_prediction(document_segments, method=method)
+                document_segments = []
+                current_document = new_document
+
+            segment_prediction = self.predict_segment_batch(batch)
+            segments.append(segment_prediction)
+            document_segments.append(segment_prediction)
+
+        if current_document is not None and document_segments:
+            doc_id, attribute = current_document
+            documents[doc_id][attribute] = self.segments_to_prediction(document_segments, method=method)
+
+        return DocumentPrediction(documents, segments)
+
+    @staticmethod
+    def segments_to_prediction(segments: List[SegmentPrediction], method: str = 'greedy') -> dict:
+        predictions = []
+        scores = []
+
+        for segment in segments:
+            predictions.extend(segment.predictions)
+            scores.extend(scores)
+
+        if method == 'greedy':
+            if any(predictions):
+                score, prediction = max((score, pred) for score, pred in zip(scores, predictions) if pred)
+            else:
+                score, prediction = min(zip(scores, predictions))
+                score = 1 - score
+        else:
+            # TODO: implement new method
+            raise ValueError(f'Prediction method `{method} does not exist!`')
+
+        return {
+            'prediction': prediction,
+            'confidence': score,
+        }
 
     def stop(self):
         self.is_training = False

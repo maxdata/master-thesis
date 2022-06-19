@@ -53,10 +53,10 @@ class SegmentSampler(Sampler[int]):
             return self.num_samples
 
 
-class DocumentSampler(Sampler[Tuple[str, Iterator[Tuple[str, List[int]]]]]):
+class DocumentSampler(Sampler[List[int]]):
     """
     Samples from the dataset on a per-document basis. Ensures the segments for each document are split into
-    batches of a specified batch size.
+    batches of a specified batch size, and that all segments in a batch belong to the same document and attribute.
     """
     def __init__(self, data_source: BaseDataset, num_documents: Optional[int] = None, batch_size: int = 1,
                  shuffle: bool = False, replacement: bool = False, remove_null: bool = False, generator=None) -> None:
@@ -79,7 +79,7 @@ class DocumentSampler(Sampler[Tuple[str, Iterator[Tuple[str, List[int]]]]]):
             batch_sampler = BatchSampler(indices, self.batch_size, drop_last=False)
             yield attribute, list(batch_sampler)
 
-    def __iter__(self) -> Iterator[Tuple[str, Iterator[Tuple[str, List[int]]]]]:
+    def __iter__(self) -> Iterator[List[int]]:
         documents = list(self.document_indices)
         num_returned = 0
 
@@ -91,21 +91,22 @@ class DocumentSampler(Sampler[Tuple[str, Iterator[Tuple[str, List[int]]]]]):
                 if self.num_documents is not None and num_returned >= self.num_documents:
                     return
 
-                yield doc_id, self.document_iterator(doc_id)
+                for attribute_indices in self.document_indices[doc_id].values():
+                    yield from BatchSampler(attribute_indices, self.batch_size, drop_last=False)
 
                 num_returned += 1
 
             if not self.replacement:
                 return
 
-    def __len__(self) -> int:
-        if self.num_documents is None:
-            if self.replacement:
-                return sys.maxsize
-            else:
-                return len(self.data_source)
-        else:
-            if self.replacement:
-                return self.num_documents
-            else:
-                return min(self.num_documents, len(self.data_source))
+    # def __len__(self) -> int:
+    #     if self.num_documents is None:
+    #         if self.replacement:
+    #             return sys.maxsize
+    #         else:
+    #             return len(self.data_source)
+    #     else:
+    #         if self.replacement:
+    #             return self.num_documents
+    #         else:
+    #             return min(self.num_documents, len(self.data_source))

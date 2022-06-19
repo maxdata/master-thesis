@@ -51,24 +51,23 @@ class Evaluator:
 
         return EvaluationResult(agg_metrics, df_segments, None)
 
-    def evaluate_documents(self, loaders: Iterable[Tuple[str, Iterable[Tuple[str, DataLoader]]]],
-                           label: Optional[str] = None):
+    def evaluate_documents(self, loader: DataLoader, label: Optional[str] = None):
         if self.ground_truths is None:
             raise ValueError('Cannot perform document evaluation if ground truths are not provided!')
 
-        segments = []
-        documents = []
-
         if label is None:
-            iterator = loaders
+            iterator = loader
         else:
-            iterator = tqdm(loaders, desc=label, leave=False)
+            iterator = tqdm(loader, desc=label, leave=False)
 
-        for doc_id, dataloaders in iterator:
-            results = self.trainer.predict_document_batch(dataloaders)
+        # TODO: change method to greedy
+        document_predictions, segments = self.trainer.predict_documents(iterator)
 
+        documents = []
+        for doc_id, predictions in document_predictions.items():
             document = {'doc_id': doc_id}
-            for attribute, prediction in results.predictions.items():
+
+            for attribute, prediction in predictions.items():
                 # Find result that best matches the prediction
                 expected = max(self.ground_truths[doc_id][attribute],
                                key=lambda a_true: tuple(metric_fct(a_true, prediction['prediction'])
@@ -81,7 +80,6 @@ class Evaluator:
                 for metric_name, metric_fct in self.metrics.items():
                     document[f'{attribute}/{metric_name}'] = metric_fct(expected, prediction['prediction'])
 
-            segments.extend(results.segments)
             documents.append(document)
 
         df_segments = self.segments_to_table(segments)

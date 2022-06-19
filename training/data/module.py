@@ -85,20 +85,17 @@ class SWDEDataModule:
         else:
             sampler = DocumentSampler(self.data_train, num_documents=num_documents, batch_size=self.batch_size)
 
-        for doc_id, document_indices in sampler:
-            yield doc_id, self._document_loader(self.data_train, document_indices)
+        return self._data_loader(self.data_train, sampler)
 
     def val_document_dataloaders(self, num_documents: Optional[int] = None):
         sampler = DocumentSampler(self.data_train, num_documents=num_documents, batch_size=self.batch_size)
 
-        for doc_id, document_indices in sampler:
-            yield doc_id, self._document_loader(self.data_train, document_indices)
+        return self._data_loader(self.data_val, sampler)
 
     def test_document_dataloaders(self):
         sampler = DocumentSampler(self.data_train, batch_size=self.batch_size)
 
-        for doc_id, document_indices in sampler:
-            yield doc_id, self._document_loader(self.data_train, document_indices)
+        return self._data_loader(self.data_test, sampler)
 
     def _segment_loader(self, dataset: BaseDataset, base_sampler: Optional[Sampler] = None):
         if base_sampler is None:
@@ -107,11 +104,6 @@ class SWDEDataModule:
         sampler = BatchSampler(base_sampler, batch_size=self.batch_size, drop_last=False)
 
         return self._data_loader(dataset, sampler)
-
-    def _document_loader(self, dataset: BaseDataset, iterator: Iterable[Tuple[str, Iterable[int]]]):
-        for attribute, indices in iterator:
-            yield attribute, self._data_loader(dataset, indices)
-
 
     def _data_loader(self, dataset: BaseDataset, sampler: Union[Sampler, Iterable, None]):
         return DataLoader(dataset, sampler=sampler, batch_size=None, num_workers=self.num_workers, pin_memory=True,

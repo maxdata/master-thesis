@@ -72,7 +72,7 @@ class T5Trainer(BaseTrainer):
 
         predictions = self.tokenizer.batch_decode(outputs.sequences, skip_special_tokens=True)
 
-        return loss, SegmentPrediction(batch, predictions, scores)
+        return loss, SegmentPrediction(batch, predictions, scores, None)
 
     def predict_document_batch(self, loaders: Iterable[Tuple[str, DataLoader]],
                                method: str = 'greedy') -> DocumentPrediction:
@@ -93,7 +93,7 @@ class T5Trainer(BaseTrainer):
                 doc_predictions.extend(predictions)
                 doc_scores.extend(scores)
 
-                segments.append(SegmentPrediction(batch, predictions, scores))
+                segments.append(SegmentPrediction(batch, predictions, scores, None))
 
             if method == 'greedy':
                 # TODO: this code can be split into separate function to reduce duplication.
