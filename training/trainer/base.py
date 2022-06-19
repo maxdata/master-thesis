@@ -129,12 +129,6 @@ class BaseTrainer(ABC):
         """Performs inference for a batch of segments. Returns the loss, a list of predictions, and a list of scores"""
         raise NotImplementedError
 
-    @abstractmethod
-    def predict_document_batch(self, dataloaders: Iterable[Tuple[str, DataLoader]],
-                               method: str = 'greedy') -> DocumentPrediction:
-        """Evaluates a single document. Returns, for each attribute, the prediction and confidence."""
-        raise NotImplementedError
-
     def predict_documents(self, dataloader: DataLoader, method: str = 'greedy') -> DocumentPrediction:
         documents = defaultdict(dict)
         segments = []

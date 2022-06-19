@@ -1,14 +1,13 @@
-from typing import Iterable, Tuple
+from typing import Tuple
 
 from transformers import BertTokenizer, BertForQuestionAnswering
 from transformers.modeling_outputs import QuestionAnsweringModelOutput
 
 import torch
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
 
 from data.bert import BertBatch
-from outputs import DocumentPrediction, SegmentPrediction
+from outputs import SegmentPrediction
 from trainer.base import BaseTrainer
 
 
@@ -46,10 +45,6 @@ class BertTrainer(BaseTrainer):
 
         return prediction.loss
 
-    # TODO: split into segment train and document train
-    # TODO: split into segment evaluate and document evaluate
-    # TODO: separate function for (batch,) scores and (batch,2) start and end positions
-
     def predict_segment_batch(self, batch: BertBatch) -> Tuple[float, SegmentPrediction]:
         with torch.no_grad():
             outputs = self.forward(batch)
@@ -58,53 +53,11 @@ class BertTrainer(BaseTrainer):
 
         predictions = self.spans_to_predictions(batch, spans)
         embeddings = [
-            outputs.hidden_states[-1][i, start:end + 1]
+            outputs.hidden_states[-1][i, start:end + 1].detach().cpu()
             for i, (start, end) in enumerate(spans)
         ]
 
         return float(outputs.loss), SegmentPrediction(batch, predictions, scores, embeddings)
-
-    def predict_document_batch(self, loaders: Iterable[Tuple[str, DataLoader[BertBatch]]],
-                               method: str = 'greedy') -> DocumentPrediction:
-        attribute_predictions = {}
-        segments = []
-        for attribute, dataloader in loaders:
-            doc_predictions, doc_embeddings, doc_scores = [], [], []
-
-            for batch in dataloader:
-                # TODO: if we want to do end-to-end training, we do need the gradients
-                with torch.no_grad():
-                    outputs = self.forward(batch)
-
-                    scores, spans = self.extract_spans(batch, outputs)
-                    predictions = self.spans_to_predictions(batch, spans)
-                    embeddings = [
-                        outputs.hidden_states[-1][i, start:end + 1]
-                        for i, (start, end) in enumerate(spans)
-                    ]
-
-                doc_predictions.extend(predictions)
-                doc_embeddings.extend(embeddings)
-                doc_scores.extend(scores)
-
-                segments.append(SegmentPrediction(batch, predictions, scores))
-
-            if method == 'greedy':
-                if any(doc_predictions):
-                    best_index = max((i for i, pred in enumerate(doc_predictions) if pred), key=lambda i: doc_scores[i])
-                else:
-                    best_index = min(range(len(doc_scores)), key=lambda i: doc_scores[i])
-                    doc_scores[best_index] = 1 - doc_scores[best_index]
-
-                attribute_predictions[attribute] = {
-                    'prediction': doc_predictions[best_index],
-                    'confidence': doc_scores[best_index],
-                }
-            else:
-                # TODO: implement new method
-                raise ValueError(f'Prediction method `{method} does not exist!`')
-
-        return DocumentPrediction(attribute_predictions, segments)
 
     def spans_to_predictions(self, batch: BertBatch, spans: torch.Tensor):
         predictions = []

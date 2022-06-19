@@ -104,7 +104,7 @@ class Evaluator:
     def segments_to_table(self, segments: List[SegmentPrediction]) -> pd.DataFrame:
         tables = []
 
-        for batch, predictions, scores in segments:
+        for batch, predictions, scores, _ in segments:
             segment_data = {
                 'doc_id': batch.docs,
                 'feature': batch.features,

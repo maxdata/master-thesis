@@ -83,17 +83,19 @@ class SWDEDataModule:
         if num_documents is None:
             sampler = DocumentSampler(self.data_train, shuffle=True, replacement=True, batch_size=self.batch_size)
         else:
-            sampler = DocumentSampler(self.data_train, num_documents=num_documents, batch_size=self.batch_size)
+            sampler = DocumentSampler(self.data_train, shuffle=True, num_documents=num_documents,
+                                      batch_size=self.batch_size)
 
         return self._data_loader(self.data_train, sampler)
 
     def val_document_dataloader(self, num_documents: Optional[int] = None):
-        sampler = DocumentSampler(self.data_train, num_documents=num_documents, batch_size=self.batch_size)
+        sampler = DocumentSampler(self.data_val, num_documents=num_documents, shuffle=num_documents is not None,
+                                  batch_size=self.batch_size)
 
         return self._data_loader(self.data_val, sampler)
 
     def test_document_dataloader(self):
-        sampler = DocumentSampler(self.data_train, batch_size=self.batch_size)
+        sampler = DocumentSampler(self.data_test, batch_size=self.batch_size)
 
         return self._data_loader(self.data_test, sampler)
 
