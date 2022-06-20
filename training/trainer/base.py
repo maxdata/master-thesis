@@ -5,7 +5,7 @@ from typing import Callable, Iterable, Iterator, List, Optional, Tuple
 import numpy as np
 from tqdm import tqdm
 
-from transformers import PreTrainedTokenizer, get_constant_schedule_with_warmup
+from transformers import PreTrainedTokenizer, get_linear_schedule_with_warmup
 from transformers import logging
 
 import torch
@@ -56,6 +56,8 @@ class BaseTrainer(ABC):
 
         self.is_training = False
         self.model.to(self.device)
+        if self.reranker is not None:
+            self.reranker.to(self.device)
 
     def train(
         self,
@@ -113,7 +115,7 @@ class BaseTrainer(ABC):
         grad_accumulation_steps = batch_size // mini_batch_size
 
         optimizer = self.optimizers[self.optimizer](model.parameters(), lr=self.learning_rate)
-        scheduler = get_constant_schedule_with_warmup(optimizer, num_steps // 50, num_steps)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_steps // 50, num_steps)
 
         data_iterator = iter(dataloader)
 
@@ -153,8 +155,8 @@ class BaseTrainer(ABC):
     def train_rerank_step(self, batch: RerankBatch) -> torch.Tensor:
         loss_fct = nn.CrossEntropyLoss()
 
-        outputs = self.reranker(batch.X)
-        return loss_fct(outputs, batch.y)
+        outputs = self.reranker(batch.X.to(self.device))
+        return loss_fct(outputs, batch.y.to(self.device))
 
     def get_rerank_batches(self, segments_per_document: Iterable[List[SegmentPrediction]], mini_batch_size: int,
                            topk: int, length: int) -> Iterator[RerankBatch]:
@@ -287,17 +289,18 @@ class BaseTrainer(ABC):
 
     def rerank_prediction(self, batch: RerankBatch) -> List[RerankResult]:
         with torch.no_grad():
-            outputs = F.softmax(self.reranker(batch.X), dim=-1)
-            best_indices, scores = outputs.max(dim=-1)
+            outputs = F.softmax(self.reranker(batch.X.to(self.device)), dim=-1)
+            scores, best_indices = outputs.max(dim=-1)
 
         results = []
-        for i, (best_index, score) in enumerate(zip(best_indices, scores)):
-            results.append(RerankResult(batch.docs[i], batch.attributes[i], batch.predictions[i][best_index], score))
+        for i, (best_index, score) in enumerate(zip(best_indices.tolist(), scores.tolist())):
+            results.append(RerankResult(batch.docs[i], batch.attributes[i], batch.predictions[best_index][i], score))
 
         return results
 
     def on_train_start(self, run_params: dict):
-        print(f'Training {self.model.__class__.__name__} for {run_params["num_steps"]} steps on device `{self.device}`')
+        # TODO: fix num steps
+        print(f'Training {self.model.__class__.__name__} for {run_params["num_segment_steps"]} steps on device `{self.device}`')
         self.is_training = True
 
         for callback in self.callbacks:

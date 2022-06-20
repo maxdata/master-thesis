@@ -127,7 +127,7 @@ def main():
     }
 
     with get_trainer(dataset, run_name, config) as trainer:
-        trainer.model.load_state_dict(torch.load(f'models/{run_name}.state_dict'))
+        trainer.model.load_state_dict(torch.load(f'models/{config.model}-greedy-{config.vertical}.state_dict'))
         trainer.train(
             # num_segment_steps=config.num_segment_steps,
             num_document_steps=config.num_document_steps,
