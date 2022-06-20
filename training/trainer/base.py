@@ -159,18 +159,21 @@ class BaseTrainer(ABC):
         return loss_fct(outputs, batch.y.to(self.device))
 
     def get_rerank_batches(self, segments_per_document: Iterable[List[SegmentPrediction]], mini_batch_size: int,
-                           topk: int, length: int) -> Iterator[RerankBatch]:
+                           topk: int, length: int) -> Iterator[Tuple[RerankBatch, List[SegmentPrediction]]]:
         batch = []
+        batch_segments = []
 
         for document_segments in segments_per_document:
+            batch_segments.extend(document_segments)
             batch.append(self.get_rerank_features(document_segments, topk, length))
 
-            if len(batch) == mini_batch_size:
-                yield default_collate(batch)
+            if len(batch_segments) == mini_batch_size:
+                yield default_collate(batch), batch_segments
                 batch = []
+                batch_segments = []
 
         if batch:
-            yield default_collate(batch)
+            yield default_collate(batch), batch_segments
 
     @staticmethod
     def get_rerank_features(segments: List[SegmentPrediction], topk: int, length: int) -> RerankBatch:
@@ -251,23 +254,19 @@ class BaseTrainer(ABC):
 
                 documents[doc_id][attribute] = self.greedy_prediction(document_segments)
         elif method == 'rerank':
-            num_done = 0
-            for rerank_batch in self.get_rerank_batches(
-                                  self.collect_document_segments(self.document_loader),
-                                  32,
-                                  topk=self.model_kwargs.get('topk', 1),
-                                  length=self.model_kwargs.get('sequence_length', 1),
-                              ):
-                results = self.rerank_prediction(rerank_batch)
+            for rerank_batch, batch_segments in self.get_rerank_batches(
+                self.collect_document_segments(dataloader),
+                32,
+                topk=self.model_kwargs.get('topk', 1),
+                length=self.model_kwargs.get('sequence_length', 1),
+            ):
+                segments.extend(batch_segments)
 
-                for result in results:
+                for result in self.rerank_prediction(rerank_batch):
                     documents[result.doc_id][result.attribute] = {
                         'prediction': result.prediction,
                         'confidence': result.confidence,
                     }
-
-                num_done += len(results)
-                print(num_done)
 
         return DocumentPrediction(documents, segments)
 
