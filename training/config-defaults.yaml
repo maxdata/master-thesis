@@ -20,10 +20,16 @@ optimizer:
   value: adamw
 batch_size:
   value: 64
-num_steps:
+num_segment_steps:
   value: 1000
-validation_interval:
+num_document_steps:
   value: 100
+evaluation_method:
+  value: rerank
+rerank_topk:
+  value: 3
+validation_interval:
+  value: 10
 validation_documents:
   value: 10
 validation_batches:

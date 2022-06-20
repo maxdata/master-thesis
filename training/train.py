@@ -9,6 +9,9 @@ from evaluation import Evaluator
 from metrics import compute_f1, compute_exact
 from trainer import BertTrainer, T5Trainer
 
+import torch
+from torch.nn import Linear
+
 
 MODELS = {
     'bert': {
@@ -71,12 +74,17 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
         SavePredictions(documents_dir=f'results/{run_name}', segments_dir=f'results/{run_name}'),
     ]
 
+    topk = config.get('rerank_topk', 1)
     trainer_kwargs = {
-        'train_loader': dataset.train_dataloader(),
+        'segment_loader': dataset.train_dataloader(),
+        'document_loader': dataset.train_document_dataloader(),
+        'reranker': Linear(768 * config.context_size * topk, topk),
         'learning_rate': config.learning_rate,
         'optimizer': config.optimizer,
         'callbacks': callbacks,
         'num_beams': config.get('num_beams'),
+        'sequence_length': config.context_size,
+        'topk': topk,
     }
 
     model_config = MODELS[config.model]
@@ -113,8 +121,19 @@ def main():
 
     dataset = get_dataset(config)
 
+    mini_batch_sizes = {
+        'bert': 16 if config.context_size == 512 else 64,
+        't5': 8 if config.context_size == 512 else 32,
+    }
+
     with get_trainer(dataset, run_name, config) as trainer:
-        trainer.train(config.num_steps, config.batch_size)
+        trainer.model.load_state_dict(torch.load(f'models/{run_name}.state_dict'))
+        trainer.train(
+            # num_segment_steps=config.num_segment_steps,
+            num_document_steps=config.num_document_steps,
+            batch_size=config.batch_size,
+            mini_batch_size=mini_batch_sizes[config.model],
+        )
 
         eval_loaders = {
             'train': lambda: dataset.train_document_dataloader(num_documents=10000),
