@@ -251,6 +251,7 @@ class BaseTrainer(ABC):
 
                 documents[doc_id][attribute] = self.greedy_prediction(document_segments)
         elif method == 'rerank':
+            num_done = 0
             for rerank_batch in self.get_rerank_batches(
                                   self.collect_document_segments(self.document_loader),
                                   32,
@@ -264,6 +265,9 @@ class BaseTrainer(ABC):
                         'prediction': result.prediction,
                         'confidence': result.confidence,
                     }
+
+                num_done += len(results)
+                print(num_done)
 
         return DocumentPrediction(documents, segments)
 

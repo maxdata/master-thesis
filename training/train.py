@@ -98,14 +98,14 @@ def get_trainer(dataset: SWDEDataModule, run_name: str, config: wandb.Config):
     if 'validation_documents' in config:
         val_callback = ValidationCallback(evaluator, config.validation_interval,
                                           document_loader=dataset.val_document_dataloader(config.validation_documents),
-                                          label='Validating')
+                                          label=f'Validating {config.validation_documents} documents')
         trainer.callbacks.append(val_callback)
     elif 'validation_batches' in config:
         val_callback = ValidationCallback(evaluator, config.validation_interval,
                                           segment_loader=dataset.val_dataloader(
                                               size=config.validation_batches * config.batch_size
                                           ),
-                                          label='Validating')
+                                          label=f'Validating {config.validation_batches * config.batch_size} segments')
         trainer.callbacks.append(val_callback)
 
     return trainer
