@@ -1,5 +1,4 @@
 import os
-from typing import Dict
 
 import torch
 from tqdm import tqdm
@@ -21,6 +20,7 @@ class ModelCheckpoint(BaseCallback):
         dirname = os.path.dirname(filename)
         os.makedirs(dirname, exist_ok=True)
 
+        self.reranker_filename = self.filename.replace('.state_dict', '_reranker.state_dict')
         self.best_score = None
 
     def on_validation_end(self, step_num: int, results: EvaluationResult):
@@ -34,7 +34,13 @@ class ModelCheckpoint(BaseCallback):
             self.best_score = new_score
             torch.save(self.trainer.model.state_dict(), self.filename)
 
+            if self.trainer.reranker is not None:
+                torch.save(self.trainer.reranker.state_dict(), self.reranker_filename)
+
     def on_train_end(self):
         if self.restore:
             tqdm.write(f'Restoring best model checkpoint from {self.filename}...')
             self.trainer.model.load_state_dict(torch.load(self.filename))
+
+            if self.trainer.reranker is not None:
+                self.trainer.reranker.load_state_dict(torch.load(self.reranker_filename))

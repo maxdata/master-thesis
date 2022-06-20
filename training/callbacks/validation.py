@@ -22,6 +22,7 @@ class ValidationCallback(BaseCallback):
         self.document_loader = document_loader
         self.label = label
         self.total_steps = 0
+        self.document_method = 'greedy'
 
         if segment_loader and document_loader:
             raise ValueError('Only one of `segment_loader` and `document_loader` can be provided...')
@@ -34,9 +35,13 @@ class ValidationCallback(BaseCallback):
             raise ValueError('At least one of `segment_loader` and `document_loader` must be provided...')
 
     def on_train_start(self, run_params: dict):
-        # TODO: fix num steps
-        self.total_steps = run_params['num_document_steps']
+        self.total_steps = run_params['num_steps']
         self.perform_validation(0)
+
+        if run_params['model_name'] == 'Linear':
+            self.document_method = 'rerank'
+        else:
+            self.document_method = 'greedy'
 
     def on_step_end(self, step_num: int, loss: float):
         if step_num % self.validation_interval == 0:
@@ -46,7 +51,8 @@ class ValidationCallback(BaseCallback):
         if self.method == 'segments':
             results = self.evaluator.evaluate_segments(self.segment_loader, label=self.label)
         else:
-            results = self.evaluator.evaluate_documents(self.document_loader, method='rerank', label=self.label)
+            results = self.evaluator.evaluate_documents(self.document_loader, method=self.document_method,
+                                                        label=self.label)
 
         formatted = ', '.join(f'val/{metric}: {value:.2f}' for metric, value in results.metrics.items())
         num = str(step_num).rjust(len(str(self.total_steps)))

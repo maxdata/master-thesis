@@ -1,12 +1,12 @@
 program: train.py
 method: grid
-name: bert-greedy-evaluation
+name: bert-rerank-evaluation
 project: information_extraction
-description: Runs the BERT models again, using the new setup with a separate evaluator and greedy evaluation
+description: Runs the BERT models and reranks the 3 results with the highest confidence
 
 parameters:
   run_name:
-    value: "{model}-greedy-{vertical}"
+    value: "{model}-rerank-{vertical}"
   model:
     value: bert
   vertical:
@@ -33,14 +33,18 @@ parameters:
     value: adamw
   batch_size:
     value: 64
-  num_steps:
+  num_segment_steps:
     value: 50000
+  num_document_steps:
+    value: 200
   validation_interval:
     value: 1000
   validation_documents:
     value: 150
   evaluation_method:
-    value: greedy
+    value: rerank
+  rerank_topk:
+    value: 3
   early_stopping_patience:
     value: 20
   num_workers:

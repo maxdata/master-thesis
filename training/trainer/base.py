@@ -20,7 +20,7 @@ from outputs import DocumentPrediction, SegmentPrediction
 
 logging.set_verbosity_error()
 
-RerankBatch = namedtuple('RerankBatch', ['docs', 'attributes', 'X', 'y', 'predictions'])
+RerankBatch = namedtuple('RerankBatch', ['docs', 'attributes', 'X', 'y', 'predictions', 'segments'])
 RerankResult = namedtuple('RerankResult', ['doc_id', 'attribute', 'prediction', 'confidence'])
 
 
@@ -54,10 +54,12 @@ class BaseTrainer(ABC):
         self.callbacks = callbacks or []
         self.model_kwargs = kwargs
 
-        self.is_training = False
         self.model.to(self.device)
         if self.reranker is not None:
             self.reranker.to(self.device)
+
+        self.is_training = False
+        self.step_num = 0
 
     def train(
         self,
@@ -82,15 +84,6 @@ class BaseTrainer(ABC):
         else:
             assert batch_size % mini_batch_size == 0, f'Batch size must be a multiple of {mini_batch_size}'
 
-        self.on_train_start({
-            'num_segment_steps': num_segment_steps,
-            'num_document_steps': num_document_steps,
-            'batch_size': batch_size,
-            'architecture': self.architecture,
-            'learning_rate': self.learning_rate,
-            'optimizer': self.optimizer,
-        })
-
         if num_segment_steps is not None:
             self.train_module(self.model, self.segment_loader, self.train_step,
                               num_segment_steps, batch_size, mini_batch_size, label='Training base model')
@@ -105,12 +98,17 @@ class BaseTrainer(ABC):
                               self.train_rerank_step, num_document_steps, batch_size, mini_batch_size,
                               label='Training reranker')
 
-        self.on_train_end()
-
     def train_module(self, model: nn.Module, dataloader: Iterable, step_fct: Callable,
                      num_steps: int, batch_size: int, mini_batch_size: int,
                      label: Optional[str] = None):
-        self.is_training = True
+        self.on_train_start({
+            'num_steps': num_steps,
+            'batch_size': batch_size,
+            'model_name': model.__class__.__name__,
+            'architecture': self.architecture,
+            'learning_rate': self.learning_rate,
+            'optimizer': self.optimizer,
+        })
 
         grad_accumulation_steps = batch_size // mini_batch_size
 
@@ -121,7 +119,9 @@ class BaseTrainer(ABC):
 
         pbar = tqdm(total=num_steps, desc=label) if label is not None else None
 
-        for step_num in range(1, num_steps + 1):
+        for _ in range(num_steps):
+            self.step_num += 1
+
             losses = []
 
             for _ in range(grad_accumulation_steps):
@@ -140,13 +140,14 @@ class BaseTrainer(ABC):
                 pbar.update()
                 pbar.set_postfix({'loss': np.mean(losses)})
 
-            self.on_step_end(step_num, np.mean(losses))
+            self.on_step_end(self.step_num, np.mean(losses))
 
             if not self.is_training:
                 # Training was stopped, most likely by early stopping
                 if pbar is not None:
                     pbar.close()
                 break
+        self.on_train_end()
 
     @abstractmethod
     def train_step(self, batch) -> torch.Tensor:
@@ -161,19 +162,16 @@ class BaseTrainer(ABC):
     def get_rerank_batches(self, segments_per_document: Iterable[List[SegmentPrediction]], mini_batch_size: int,
                            topk: int, length: int) -> Iterator[Tuple[RerankBatch, List[SegmentPrediction]]]:
         batch = []
-        batch_segments = []
 
         for document_segments in segments_per_document:
-            batch_segments.extend(document_segments)
             batch.append(self.get_rerank_features(document_segments, topk, length))
 
-            if len(batch_segments) == mini_batch_size:
-                yield default_collate(batch), batch_segments
+            if len(batch) == mini_batch_size:
+                yield default_collate(batch)
                 batch = []
-                batch_segments = []
 
         if batch:
-            yield default_collate(batch), batch_segments
+            yield default_collate(batch)
 
     @staticmethod
     def get_rerank_features(segments: List[SegmentPrediction], topk: int, length: int) -> RerankBatch:
@@ -214,7 +212,7 @@ class BaseTrainer(ABC):
 
         best_prediction = max(range(topk), key=lambda i: scores[i])
 
-        return RerankBatch(doc_id, attribute, features, best_prediction, predictions)
+        return RerankBatch(doc_id, attribute, features, best_prediction, predictions, segments)
 
     @abstractmethod
     def predict_segment_batch(self, batch) -> Tuple[float, SegmentPrediction]:
@@ -256,7 +254,7 @@ class BaseTrainer(ABC):
         elif method == 'rerank':
             for rerank_batch, batch_segments in self.get_rerank_batches(
                 self.collect_document_segments(dataloader),
-                32,
+                64,
                 topk=self.model_kwargs.get('topk', 1),
                 length=self.model_kwargs.get('sequence_length', 1),
             ):
@@ -302,8 +300,7 @@ class BaseTrainer(ABC):
         return results
 
     def on_train_start(self, run_params: dict):
-        # TODO: fix num steps
-        print(f'Training {self.model.__class__.__name__} for {run_params["num_segment_steps"]} steps on device `{self.device}`')
+        print(f'Training {run_params["model_name"]} for {run_params["num_steps"]} steps on device `{self.device}`')
         self.is_training = True
 
         for callback in self.callbacks:

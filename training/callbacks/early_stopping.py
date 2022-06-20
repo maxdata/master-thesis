@@ -16,6 +16,9 @@ class EarlyStopping(BaseCallback):
         self.best_score = None
         self.steps_since_improve = 0
 
+    def on_train_start(self, run_params: dict):
+        self.steps_since_improve = 0
+
     def on_validation_end(self, step_num: int, results: EvaluationResult):
         new_score = results.metrics[self.metric]
 

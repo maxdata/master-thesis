@@ -8,8 +8,6 @@ context_size:
   value: 256
 vertical:
   value: nbaplayer
-website:
-  value: espn
 remove_null:
   value: false
 monitor_metric:
