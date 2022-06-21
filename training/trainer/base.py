@@ -20,7 +20,7 @@ from outputs import DocumentPrediction, SegmentPrediction
 
 logging.set_verbosity_error()
 
-RerankBatch = namedtuple('RerankBatch', ['docs', 'attributes', 'X', 'y', 'predictions', 'segments'])
+RerankBatch = namedtuple('RerankBatch', ['docs', 'attributes', 'X', 'y', 'predictions'])
 RerankResult = namedtuple('RerankResult', ['doc_id', 'attribute', 'prediction', 'confidence'])
 
 
@@ -153,7 +153,8 @@ class BaseTrainer(ABC):
     def train_step(self, batch) -> torch.Tensor:
         raise NotImplementedError
 
-    def train_rerank_step(self, batch: RerankBatch) -> torch.Tensor:
+    def train_rerank_step(self, batch: Tuple[RerankBatch, List[SegmentPrediction]]) -> torch.Tensor:
+        batch = batch[0]
         loss_fct = nn.CrossEntropyLoss()
 
         outputs = self.reranker(batch.X.to(self.device))
@@ -162,16 +163,19 @@ class BaseTrainer(ABC):
     def get_rerank_batches(self, segments_per_document: Iterable[List[SegmentPrediction]], mini_batch_size: int,
                            topk: int, length: int) -> Iterator[Tuple[RerankBatch, List[SegmentPrediction]]]:
         batch = []
+        batch_segments = []
 
         for document_segments in segments_per_document:
             batch.append(self.get_rerank_features(document_segments, topk, length))
+            batch_segments.extend(document_segments)
 
             if len(batch) == mini_batch_size:
-                yield default_collate(batch)
+                yield default_collate(batch), batch_segments
                 batch = []
+                batch_segments = []
 
         if batch:
-            yield default_collate(batch)
+            yield default_collate(batch), batch_segments
 
     @staticmethod
     def get_rerank_features(segments: List[SegmentPrediction], topk: int, length: int) -> RerankBatch:
@@ -212,7 +216,7 @@ class BaseTrainer(ABC):
 
         best_prediction = max(range(topk), key=lambda i: scores[i])
 
-        return RerankBatch(doc_id, attribute, features, best_prediction, predictions, segments)
+        return RerankBatch(doc_id, attribute, features, best_prediction, predictions)
 
     @abstractmethod
     def predict_segment_batch(self, batch) -> Tuple[float, SegmentPrediction]:
