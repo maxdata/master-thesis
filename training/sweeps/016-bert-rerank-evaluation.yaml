@@ -38,7 +38,7 @@ parameters:
   num_document_steps:
     value: 200
   validation_interval:
-    value: 0.02
+    value: 0.1
   validation_documents:
     value: 150
   evaluation_method:

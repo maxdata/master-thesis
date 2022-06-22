@@ -136,7 +136,7 @@ def main():
         )
 
         eval_loaders = {
-            'train': lambda: dataset.train_document_dataloader(num_documents=10000),
+            'train': lambda: dataset.train_document_dataloader(num_documents=len(set(dataset.data_val.docs))),
             'val': lambda: dataset.val_document_dataloader(),
             'test': lambda: dataset.test_document_dataloader(),
         }
@@ -146,8 +146,8 @@ def main():
 
         for split in config.get('evaluation_datasets', ['train', 'val', 'test']):
             results = evaluator.evaluate_documents(eval_loaders[split](),
-                                                   method=config.get('evaluation_method', 'greedy'),
-                                                   label=f'Evaluating {split}')
+                                                   method=config.evaluation_method,
+                                                   label=f'Evaluating {split} with {config.evaluation_method}')
 
             for callback in trainer.callbacks:
                 callback.on_evaluation_end(split, results)
