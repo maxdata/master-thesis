@@ -1,0 +1,51 @@
+program: try_html_representation.py
+method: grid
+name: html-embeddings
+project: information_extraction
+description: Instead of injecting HTML into the sequence, use SBERT to turn the HTML encodings into embeddings.
+
+parameters:
+  run_name:
+    value: "html-embeddings-{vertical}"
+  model:
+    value: bert
+  representation:
+    value: html-id-class
+  context_size:
+    value: 256
+  parent_depth:
+    value: 3
+  vertical:
+    values:
+    - university
+    - restaurant
+    - nbaplayer
+    - movie
+    - job
+    - camera
+    - book
+    - auto
+  monitor_metric:
+    value: "document/instance/f1"
+  remove_null:
+    value: false
+  learning_rate:
+    value: 0.00005
+  optimizer:
+    value: adamw
+  batch_size:
+    value: 64
+  num_steps:
+    value: 50000
+  warmup_steps:
+    value: 1000
+  validation_interval:
+    value: 1000
+  validation_documents:
+    value: 150
+  evaluation_method:
+    value: greedy
+  early_stopping_patience:
+    value: 20
+  num_workers:
+    value: 0

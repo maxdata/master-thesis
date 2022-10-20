@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
+import json
 from pathlib import Path
 import time
 from typing import Iterable, Iterator, List, Optional, Tuple, Union
-
-import pandas as pd
 
 from torch.utils.data import Dataset
 
@@ -13,6 +12,7 @@ from transformers import PreTrainedTokenizer
 class BaseDataset(Dataset, ABC):
     docs: List[str] = []
     inputs: List[str] = []
+    ancestors: List[List[Union[str, Optional[int]]]] = []
     targets: List[str] = []
     features: List[str] = []
 
@@ -25,7 +25,7 @@ class BaseDataset(Dataset, ABC):
         self.tokenizer = tokenizer
         self.remove_null = remove_null
 
-        self.tokenize_kwargs = {'return_tensors': 'pt', 'padding': True}
+        self.tokenize_kwargs = {'return_tensors': 'pt', 'padding': True, 'is_split_into_words': True}
         if max_length is not None:
             self.tokenize_kwargs['truncation'] = True
             self.tokenize_kwargs['max_length'] = max_length
@@ -34,7 +34,7 @@ class BaseDataset(Dataset, ABC):
             print(f'Loading {self.__class__.__name__}...', end=' ', flush=True)
             start = time.time()
 
-            self.docs, self.inputs, self.targets, self.features = self.read_data()
+            self.docs, self.inputs, self.ancestors, self.targets, self.features = self.read_data()
             self.prepare_inputs()
 
             self.indices_with_data = [i for i, t in enumerate(self.targets) if t]
@@ -54,14 +54,18 @@ class BaseDataset(Dataset, ABC):
         ))]
 
     def read_csv(self, file: Path) -> Iterator[Tuple[str, ...]]:
-        df = pd.read_csv(file, dtype=str).fillna('')
+        with open(file) as _file:
+            data = json.load(_file)
 
-        features = [col for col in df.columns if col not in ('doc_id', 'text') and not col.startswith('pos/')]
+        for entry in data:
+            features = [key
+                        for key in entry
+                        if key not in ('doc_id', 'text', 'ancestors')
+                        and not key.startswith('pos/')]
 
-        for _, row in df.iterrows():
             for feature in features:
-                if row[feature] or not self.remove_null:
-                    yield row['doc_id'], row['text'], row[feature], feature
+                if entry[feature] or not self.remove_null:
+                    yield entry['doc_id'], entry['text'], entry['ancestors'], entry[feature] or '', feature
 
     def __len__(self):
         return len(self.inputs)

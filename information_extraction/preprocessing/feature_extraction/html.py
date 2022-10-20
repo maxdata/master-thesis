@@ -1,7 +1,7 @@
 from lxml import etree
 from pathlib import Path
 import re
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 
 from transformers import PreTrainedTokenizer
 
@@ -86,8 +86,9 @@ class HtmlExtractor(BaseExtractor):
 
         return ancestor_encoding
 
-    def feature_representation(self, elem: etree.Element) -> str:
+    def feature_representation(self, elem: etree.Element) -> Tuple[List[str], List[str]]:
         texts = []
+        ancestors = []
 
         for text in elem.xpath(".//text()"):
             if not text.strip():
@@ -100,10 +101,11 @@ class HtmlExtractor(BaseExtractor):
                 # The text follows the 'parent' node, so the real parent is one level up
                 parent = text.getparent().getparent()
 
-            prefix = ' '.join(self.get_ancestor_encoding(parent))
-            texts.append(f'{prefix} {text.strip()}')
+            encoded_ancestors = ' '.join(self.get_ancestor_encoding(parent))
+            texts.append(text.strip())
+            ancestors.append(encoded_ancestors)
 
-        return ' '.join(texts)
+        return texts, ancestors
 
     @staticmethod
     def split_attribute_value(value: str) -> List[str]:

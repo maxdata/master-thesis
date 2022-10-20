@@ -30,8 +30,11 @@ class BertTrainer(BaseTrainer):
         )
 
     def forward(self, batch: BertBatch):
+        input_embeddings = self.model.bert.get_input_embeddings()(batch.input_ids.to(self.device))
+        input_embeddings += batch.html_embeddings.to(self.device)
+
         return self.model(
-            input_ids=batch.input_ids.to(self.device),
+            inputs_embeds=input_embeddings,
             attention_mask=batch.attention_mask.to(self.device),
             token_type_ids=batch.token_type_ids.to(self.device),
             start_positions=batch.start_positions.to(self.device),

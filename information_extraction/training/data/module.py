@@ -1,10 +1,10 @@
-from pathlib import Path
 from typing import Iterable, Iterator, List, Optional, Union
 
 import torch
 from torch.utils.data import BatchSampler, DataLoader, RandomSampler, Sampler, SequentialSampler
 from transformers import BertTokenizerFast, T5TokenizerFast
 
+from information_extraction.dtypes import PathLike
 from . import BaseDataset
 from .bert import BertDataset
 from .sampler import DocumentSampler, SegmentSampler
@@ -16,9 +16,6 @@ torch.multiprocessing.set_sharing_strategy(sharing_strategy)
 
 def set_worker_sharing_strategy(worker_id: int) -> None:
     torch.multiprocessing.set_sharing_strategy(sharing_strategy)
-
-
-PathLike = Union[str, Path]
 
 
 class SWDEDataModule:

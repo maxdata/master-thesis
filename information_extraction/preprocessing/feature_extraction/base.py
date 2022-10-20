@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from io import StringIO
+import json
 from multiprocessing import Process, Queue
 import os
 from pathlib import Path
@@ -26,7 +27,7 @@ EXTRA_TOKEN_SPACE = 10
 
 
 class BaseExtractor(ABC):
-    output_format = '{split}/{vertical}/{website}/features-{max_length}.csv'
+    output_format = '{split}/{vertical}/{website}/features-{max_length}.json'
     position_attributes = {'x', 'y', 'width', 'height'}
 
     def __init__(self, input_path: Path, output_path: Path, tokenizer: PreTrainedTokenizer,
@@ -46,7 +47,7 @@ class BaseExtractor(ABC):
             self.position_attributes = set()
 
     @abstractmethod
-    def feature_representation(self, elem: etree.Element) -> str:
+    def feature_representation(self, elem: etree.Element) -> Tuple[List[str], List[str]]:
         raise NotImplementedError
 
     @staticmethod
@@ -73,7 +74,6 @@ class BaseExtractor(ABC):
             (str(base_dir / filename), f'{vertical}/{website}/{filename[:-4]}')
             for filename in files
         ])
-        df_features = pd.DataFrame(extracted_features)
 
         destination = self.output_path / self.output_format.format(
             split=split,
@@ -83,10 +83,11 @@ class BaseExtractor(ABC):
         )
         destination.parent.mkdir(exist_ok=True, parents=True)
 
-        df_features.to_csv(destination, index=False)
+        with open(destination, 'w') as _file:
+            json.dump(extracted_features, _file)
 
         if self.num_too_large > 0:
-            num_total = self.num_too_large + len(df_features)
+            num_total = self.num_too_large + len(extracted_features)
             print(f'Warning: {vertical}-{website} has {self.num_too_large}/{num_total} '
                   f'({self.num_too_large / num_total * 100:.2f}%) unsplittable texts that are '
                   f'longer than {self.max_length} tokens')
@@ -138,12 +139,12 @@ class BaseExtractor(ABC):
         return self.extract_features(cleaned_body, ground_truth)
 
     def extract_features(self, elem: etree.Element, ground_truth: dict) -> List[dict]:
-        representation = self.feature_representation(elem).strip()
+        contents, encoded_ancestors = self.feature_representation(elem)
 
-        if not representation:
+        if not contents:
             return []
 
-        if len(self.tokenizer.tokenize(representation)) > self.max_length - EXTRA_TOKEN_SPACE:
+        if len(self.tokenizer.encode(contents, is_split_into_words=True)) > self.max_length - EXTRA_TOKEN_SPACE:
             if not len(elem):
                 # This element is too large to fit in the document, but cannot
                 # be split into sub-elements
@@ -160,7 +161,8 @@ class BaseExtractor(ABC):
         normalized_text = normalize_answer(self.text_representation(elem))
 
         results = [{
-            'text': representation,
+            'text': contents,
+            'ancestors': encoded_ancestors,
             **{
                 f'pos/{attr}': elem.get(f'data-{attr}')
                 for attr in self.position_attributes

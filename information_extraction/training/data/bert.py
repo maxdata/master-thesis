@@ -1,21 +1,23 @@
-from collections import namedtuple
-import re
 from typing import List
+import uuid
 
 import torch
+from torch.nn.utils.rnn import pad_sequence
+from sentence_transformers import SentenceTransformer
 
 from information_extraction.dtypes import BertBatch
 from information_extraction.training.data import BaseDataset
-from information_extraction.data.metrics import normalize_answer, normalize_with_mapping
+from information_extraction.data.metrics import normalize_answer
+from information_extraction.config import DATA_DIR
 
 
 class BertDataset(BaseDataset):
-    start_char_positions: List[int]
-    end_char_positions: List[int]
+    word_indices: List[int]
+    empty_embedding: torch.Tensor
+    embedding_location: str
 
     def prepare_inputs(self):
-        self.start_char_positions = []
-        self.end_char_positions = []
+        self.word_indices = []
 
         not_null_indices = []
         num_not_found = 0
@@ -24,67 +26,96 @@ class BertDataset(BaseDataset):
 
             if not normalized_target:
                 # Use -1 to indicate the value was not found
-                self.start_char_positions.append(-1)
-                self.end_char_positions.append(-1)
+                self.word_indices.append(-1)
                 continue
 
-            # We find the normalized answer in the normalized context, and then map that back to the original sequence
-            normalized_context, char_mapping = normalize_with_mapping(context)
-
-            match = re.search(f'\\b{re.escape(normalized_target)}\\b', normalized_context)
-
-            if match is not None and 0 <= match.start() <= match.end() - 1 < len(char_mapping):
-                self.start_char_positions.append(char_mapping[match.start()])
-                self.end_char_positions.append(char_mapping[match.end() - 1])
-                not_null_indices.append(index)
+            for i, word in enumerate(context):
+                if normalize_answer(word) == normalized_target:
+                    self.word_indices.append(i)
+                    break
             else:
-                # Use -1 to indicate the value was not found
-                self.start_char_positions.append(-1)
-                self.end_char_positions.append(-1)
+                self.word_indices.append(-1)
                 num_not_found += 1
 
         if self.remove_null:
             self.inputs = [self.inputs[i] for i in not_null_indices]
             self.targets = [self.targets[i] for i in not_null_indices]
+            self.ancestors = [self.ancestors[i] for i in not_null_indices]
             self.features = [self.features[i] for i in not_null_indices]
-            self.start_char_positions = [self.start_char_positions[i] for i in not_null_indices]
-            self.end_char_positions = [self.end_char_positions[i] for i in not_null_indices]
+            self.word_indices = [self.word_indices[i] for i in not_null_indices]
         elif num_not_found > 0:
             print(f'Warning: BertDataset found {num_not_found}/{len(self.inputs)} samples '
                   f'where the context does not contain the answer!')
 
+        model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        distinct_ancestors = list(set(x for a in self.ancestors for x in a))
+        encoded_ancestors = torch.as_tensor(model.encode(distinct_ancestors, device=device, convert_to_numpy=True,
+                                            show_progress_bar=True)).repeat(1, 2)
+
+        embedding_mapping = {a: i for i, a in enumerate(distinct_ancestors)}
+        self.ancestors = [
+            [embedding_mapping[ancestors] if ancestors else None for ancestors in ancestors_per_word]
+            for ancestors_per_word in self.ancestors
+        ]
+        self.empty_embedding = torch.zeros_like(encoded_ancestors[0])
+
+        self.embedding_location = str(DATA_DIR / f'{uuid.uuid4().hex}.pickle')
+        torch.save(encoded_ancestors, self.embedding_location)
+
     def __getitem__(self, idx: List[int]) -> BertBatch:
         docs = [self.docs[i] for i in idx]
         inputs = [self.inputs[i] for i in idx]
+        ancestors = [self.ancestors[i] for i in idx]
         targets = [self.targets[i] for i in idx]
         features = [self.features[i] for i in idx]
-        start_char_positions = [self.start_char_positions[i] for i in idx]
-        end_char_positions = [self.end_char_positions[i] for i in idx]
+        word_indices = [self.word_indices[i] for i in idx]
 
-        encoding = self.tokenizer(features, inputs, **self.tokenize_kwargs)
+        encoding = self.tokenizer([[f] for f in features], inputs, **self.tokenize_kwargs)
 
         start_positions = []
         end_positions = []
 
-        for i, (start_char, end_char) in enumerate(zip(start_char_positions, end_char_positions)):
-            if start_char < 0:
+        for batch_index, word_index in enumerate(word_indices):
+            if word_index < 0:
                 # In this case, the answer does not exist in the context
                 start_positions.append(0)
                 end_positions.append(0)
             else:
-                start_pos = encoding.char_to_token(i, start_char, sequence_index=1)
-                end_pos = encoding.char_to_token(i, end_char, sequence_index=1)
+                token_span = encoding.word_to_tokens(batch_index, word_index, sequence_index=1)
 
-                if start_pos is not None and end_pos is not None:
-                    start_positions.append(start_pos)
-                    end_positions.append(end_pos)
+                if token_span is not None:
+                    start_positions.append(token_span.start)
+                    end_positions.append(token_span.end - 1)
                 else:
                     start_positions.append(0)
                     end_positions.append(0)
 
+        embedding_matrix = torch.load(self.embedding_location)
+        html_embeddings = []
+        for batch_index, ancestors_per_word in enumerate(ancestors):
+            current_embeddings = []
+
+            for token_index in range(encoding.input_ids.shape[1]):
+                word_index = encoding.token_to_word(batch_index, token_index)
+
+                if encoding.token_to_sequence(batch_index, word_index) == 1 and word_index is not None:
+                    current_embeddings.append(
+                        embedding_matrix[ancestors_per_word[word_index]]
+                        if ancestors_per_word[word_index] is not None
+                        else self.empty_embedding
+                    )
+                else:
+                    current_embeddings.append(self.empty_embedding)
+
+            html_embeddings.append(torch.stack(current_embeddings))
+
+        html_embeddings = pad_sequence(html_embeddings, batch_first=True)
+
         return BertBatch(
             docs,
             inputs,
+            html_embeddings,
             targets,
             features,
             encoding.input_ids,

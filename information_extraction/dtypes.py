@@ -12,7 +12,7 @@ T5Batch = namedtuple('T5Batch', ['docs', 'inputs', 'targets', 'features',
                                  'input_ids', 'attention_mask', 'decoder_input_ids',
                                  'decoder_attention_mask', 'target_labels'])
 
-BertBatch = namedtuple('BertBatch', ['docs', 'inputs', 'targets', 'features',
+BertBatch = namedtuple('BertBatch', ['docs', 'inputs', 'html_embeddings', 'targets', 'features',
                                      'input_ids', 'attention_mask', 'token_type_ids',
                                      'start_positions', 'end_positions'])
 
