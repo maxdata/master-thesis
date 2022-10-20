@@ -71,6 +71,19 @@ class Evaluator:
     def get_global_metrics(self, df_documents: pd.DataFrame) -> dict:
         global_metrics = {}
 
+        if 'attribute' in df_documents.columns and 'result/true' in df_documents.columns:
+            # We compute the metrics per document and macro-average over the documents
+            p, r, f1 = map(np.mean, zip(*[
+                self.get_precision_recall_f1(df_doc['result/true'], df_doc['result/pred'])
+                for _, df_doc in df_documents.groupby('doc_id')
+            ]))
+
+            return {
+                'precision': p,
+                'recall': r,
+                'f1': f1
+            }
+
         attributes = [column[:-5] for column in df_documents.columns if column.endswith('/true')]
 
         for attribute in attributes:

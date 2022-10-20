@@ -55,13 +55,13 @@ class HtmlExtractor(BaseExtractor):
         self.encode_tag_subset = encode_tag_subset
         self.split_attributes = split_attributes
 
-    def get_parent_prefix(self, elem: etree.Element, depth: int = 0) -> List[str]:
+    def get_ancestor_encoding(self, elem: etree.Element, depth: int = 0) -> List[str]:
         if depth >= self.parent_depth:
             return []
         elif elem is None:
             return []
 
-        parent_prefix = self.get_parent_prefix(elem.getparent(), depth=depth + 1)
+        ancestor_encoding = self.get_ancestor_encoding(elem.getparent(), depth=depth + 1)
 
         current_parent = [
             f'{self.parent_prefix}{depth}{self.tag_suffix} {elem.tag}',
@@ -82,9 +82,9 @@ class HtmlExtractor(BaseExtractor):
                     parts = value.split()
                 current_parent.extend(f'{self.parent_prefix}{depth}{self.class_suffix} {part}' for part in parts)
 
-        parent_prefix.extend(current_parent)
+        ancestor_encoding.extend(current_parent)
 
-        return parent_prefix
+        return ancestor_encoding
 
     def feature_representation(self, elem: etree.Element) -> str:
         texts = []
@@ -100,7 +100,7 @@ class HtmlExtractor(BaseExtractor):
                 # The text follows the 'parent' node, so the real parent is one level up
                 parent = text.getparent().getparent()
 
-            prefix = ' '.join(self.get_parent_prefix(parent))
+            prefix = ' '.join(self.get_ancestor_encoding(parent))
             texts.append(f'{prefix} {text.strip()}')
 
         return ' '.join(texts)

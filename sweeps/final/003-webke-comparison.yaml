@@ -1,33 +1,23 @@
-program: try_html_representation.py
+program: train.py
 method: grid
-name: representation
+name: webke-comparison
 project: information_extraction
-description: Comparison between different representations for BERT
+description: Runs the BERT models on the splits used in the WebKE paper, for a proper comparison between the models
 
 parameters:
   run_name:
-    value: "representation-{representation}"
+    value: "{model}-webke-{vertical}"
   model:
     value: bert
-  representation:
+  vertical:
     values:
-    - text
-    - html-simple
-    - html-base
-    - html-id
-    - html-class
-    - html-id-class
-    - html-id-class-subset
-    - html-id-expanded
-    - html-class-expanded
-    - html-id-class-expanded
-    - html-id-class-expanded-subset
+    - movie
+    - nbaplayer
+    - university
   context_size:
     value: 256
-  parent_depth:
-    value: 3
-  vertical:
-    value: movie
+  representation:
+    value: html-webke
   remove_null:
     value: false
   monitor_metric:

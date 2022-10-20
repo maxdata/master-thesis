@@ -6,7 +6,7 @@ description: Runs the BERT and T5 models on each of the domains in the SWDE data
 
 parameters:
   run_name:
-    value: "final-{model}-{vertical}"
+    value: "{model}-{vertical}"
   model:
     values:
     - bert
@@ -21,14 +21,12 @@ parameters:
     - nbaplayer
     - restaurant
     - university
-  num_beams:
-    value: 3
+  context_size:
+    value: 256
   representation:
     value: html
   remove_null:
     value: false
-  context_size:
-    value: 256
   monitor_metric:
     value: "document/instance/f1"
   learning_rate:

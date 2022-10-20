@@ -111,12 +111,12 @@ class BaseExtractor(ABC):
             process.start()
 
         extracted_features = []
-        num_none = 0
+        num_finished = 0
 
-        while num_none < self.num_workers:
+        while num_finished < self.num_workers:
             features = result_queue.get()
             if features is None:
-                num_none += 1
+                num_finished += 1
             else:
                 extracted_features.extend(features)
 

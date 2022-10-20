@@ -1,37 +1,34 @@
 program: try_html_representation.py
 method: grid
-name: representation
+name: ancestor-depth
 project: information_extraction
-description: Comparison between different representations for BERT
+description: Comparison between different representations for BERT, with different numbers of encoded ancestors
 
 parameters:
   run_name:
-    value: "representation-{representation}"
+    value: "ancestors-{representation}-{parent_depth}"
   model:
     value: bert
   representation:
     values:
-    - text
-    - html-simple
     - html-base
     - html-id
     - html-class
     - html-id-class
-    - html-id-class-subset
     - html-id-expanded
-    - html-class-expanded
     - html-id-class-expanded
-    - html-id-class-expanded-subset
   context_size:
     value: 256
   parent_depth:
-    value: 3
+    values:
+    - 4
+    - 5
   vertical:
     value: movie
-  remove_null:
-    value: false
   monitor_metric:
     value: "document/instance/f1"
+  remove_null:
+    value: false
   learning_rate:
     value: 0.00005
   optimizer:

@@ -4,23 +4,49 @@ import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import numpy as np
 import pandas as pd
 
-from information_extraction.analysis.tables import get_wandb_tables, print_latex_table, aggregate_tables
-from information_extraction.evaluation import Evaluator
-from information_extraction.evaluation.open import get_precision_recall_f1
+from information_extraction.analysis.tables import get_wandb_tables, get_wandb_artifact, print_latex_table, aggregate_tables
+from information_extraction.analysis.stats import perform_significance_test, perform_aggregation_and_significance_tests
+from information_extraction.evaluation import get_evaluator, Evaluator
+from information_extraction.evaluation.openie import get_precision_recall_f1
 from information_extraction.data.ground_truths import GROUND_TRUTHS
-from information_extraction.data.metrics import compute_f1, compute_exact
+from information_extraction.data.metrics import compute_f1
 
 from information_extraction.analysis.mappings import CLOSED_TO_OPEN_MAPPING, OPEN_TO_CLOSED_MAPPING, WEBKE_SPLIT_MAPPING
 from information_extraction.config import DATA_DIR
 
 
-SWEEP_ID = 'ufw4xonq'
+SWEEP_ID = '3sn14gvv'
 
 EXPANDED_SWDE_DIR = DATA_DIR / 'ExpandedSWDE'
-WEBKE_RESULT_DIR = DATA_DIR / 'WebKE' / 'Results'
+
+
+def get_webke_results(split_name: str = 'test') -> dict:
+    webke_result_dir = get_wandb_artifact('webke-predictions')
+
+    results = {}
+
+    for vertical in os.listdir(webke_result_dir):
+        results[vertical] = {}
+        for filename in os.listdir(webke_result_dir / vertical / split_name):
+            with open(webke_result_dir / vertical / split_name / filename) as _file:
+                data = json.load(_file)['pred_list_pred']
+
+            doc_id = filename.split('.')[0]
+            original_website, original_doc_id = WEBKE_SPLIT_MAPPING[split_name][vertical].get(doc_id, ('webke', doc_id))
+
+            if original_website == 'webke':
+                # We could not map this back to a document
+                continue
+
+            original_website = original_website.split('(')[0].split('-')[-1]
+
+            doc_id = f'{vertical}/{original_website}/{original_doc_id}'
+
+            results[vertical][doc_id] = data
+
+    return results
 
 
 def map_webke_to_closed(data: List[Tuple[str, str]], mapping: Dict[str, str], ground_truths: Dict[str, str]):
@@ -45,35 +71,24 @@ def map_webke_to_closed(data: List[Tuple[str, str]], mapping: Dict[str, str], gr
     return result
 
 
-def get_webke_as_closed(evaluator: Evaluator, webke_result_dir: Path):
-    split_name = 'test'
+def get_webke_as_closed(evaluator: Evaluator):
+    webke_predictions = get_webke_results()
 
-    results = {}
+    closed_results = {}
 
-    for vertical in os.listdir(webke_result_dir):
-        results[vertical] = {}
-        for filename in os.listdir(webke_result_dir / vertical / split_name):
-            with open(webke_result_dir / vertical / split_name / filename) as _file:
-                data = json.load(_file)['pred_list_pred']
+    for vertical, predictions in webke_predictions.items():
+        vertical_predictions = {}
+        for doc_id, prediction in predictions.items():
+            _, original_website, _ = doc_id.split('/')
+            vertical_predictions[doc_id] = map_webke_to_closed(
+                prediction,
+                OPEN_TO_CLOSED_MAPPING[vertical][original_website],
+                GROUND_TRUTHS[doc_id]
+            )
 
-            doc_id = filename.split('.')[0]
-            original_website, original_doc_id = WEBKE_SPLIT_MAPPING[split_name][vertical].get(doc_id, ('webke', doc_id))
+        closed_results[vertical] = evaluator.documents_to_table(vertical_predictions)
 
-            if original_website == 'webke':
-                # We could not map this back to a document
-                continue
-
-            original_website = original_website.split('(')[0].split('-')[-1]
-
-            doc_id = f'{vertical}/{original_website}/{original_doc_id}'
-
-            results[vertical][doc_id] = map_webke_to_closed(data, OPEN_TO_CLOSED_MAPPING[vertical][original_website],
-                                                            GROUND_TRUTHS[doc_id])
-
-    return {
-        vertical: evaluator.documents_to_table(predictions)
-        for vertical, predictions in results.items()
-    }
+    return closed_results
 
 
 def get_own_as_closed(evaluator: Evaluator, sweep_id: str):
@@ -96,28 +111,43 @@ def get_own_as_closed(evaluator: Evaluator, sweep_id: str):
 
 def print_closed_performance():
     valid_rows = [
-        (vertical, website, attribute)
+        {
+            'vertical': vertical,
+            'website': website,
+            'attribute': attribute,
+        }
         for vertical, vertical_mapping in CLOSED_TO_OPEN_MAPPING.items()
         for website, website_mapping in vertical_mapping.items()
         for attribute, open_labels in website_mapping.items()
         if open_labels is not None
     ]
 
-    evaluator = Evaluator({'f1': compute_f1, 'em': compute_exact})
+    evaluator = get_evaluator()
 
     results = {
         'Ours': get_own_as_closed(evaluator, SWEEP_ID),
-        'WebKE': get_webke_as_closed(evaluator, WEBKE_RESULT_DIR),
+        'WebKE': get_webke_as_closed(evaluator),
     }
 
-    df = pd.concat({
-        key: aggregate_tables(evaluator, tables, per_vertical=True, per_website=True,
-                              per_attribute=True).loc[valid_rows].groupby(level=0).mean()
-        for key, tables in results.items()
-    }).swaplevel().sort_index()
+    tables = {
+        f'{model}-{run_name}': table
+        for model, runs in results.items()
+        for run_name, table in runs.items()
+    }
 
-    print_latex_table(df, 'Comparison between our own model and WebKE on the regular SWDE dataset.',
-                      'table:webke_comparison_swde')
+    df_agg = aggregate_tables(evaluator, tables, per_vertical=True, run_name_parts=[0], subset=valid_rows)
+    df_agg = df_agg.swaplevel().sort_index(ascending=[True, False])
+    df_agg.index.names = ['Vertical', 'Model']
+
+    significances = perform_aggregation_and_significance_tests(evaluator, tables, baselines=['WebKE', 'Ours'],
+                                                               p_value=0.01, run_name_parts=[0], per_vertical=True,
+                                                               subset=valid_rows)
+
+    print(significances.sort_index(ascending=[False, True, False]))
+
+    print_latex_table(df_agg.style.format_index('\\texttt{{{}}}', level=0),
+                      'Comparison between our own model and WebKE on the regular SWDE dataset.',
+                      'table:webke_comparison_swde', highlight_axis='index')
 
 
 def limit_to_closed(predictions: Dict[str, List[Tuple[str, str]]]):
@@ -134,26 +164,8 @@ def limit_to_closed(predictions: Dict[str, List[Tuple[str, str]]]):
     return new_predictions
 
 
-def get_webke_as_open(webke_result_dir: Path):
-    split_name = 'test'
-
-    results = defaultdict(dict)
-
-    for vertical in os.listdir(webke_result_dir):
-        for filename in os.listdir(webke_result_dir / vertical / split_name):
-            with open(webke_result_dir / vertical / split_name / filename) as _file:
-                data = json.load(_file)['pred_list_pred']
-
-            doc_id = filename.split('.')[0]
-            original_website, original_doc_id = WEBKE_SPLIT_MAPPING[split_name][vertical].get(doc_id, ('webke', doc_id))
-
-            if original_website == 'webke':
-                # We could not map this back to a document
-                continue
-
-            original_website = original_website.split('(')[0].split('-')[-1]
-
-            results[vertical][f'{vertical}/{original_website}/{original_doc_id}'] = data
+def get_webke_as_open():
+    results = get_webke_results()
 
     return {vertical: limit_to_closed(data) for vertical, data in results.items()}
 
@@ -208,21 +220,41 @@ def get_expanded_swde(expanded_swde_dir: Path):
 def print_open_performance():
     results = {
         'Ours': get_own_as_open(SWEEP_ID),
-        'WebKE': get_webke_as_open(WEBKE_RESULT_DIR),
+        'WebKE': get_webke_as_open(),
     }
 
     ground_truth = get_expanded_swde(EXPANDED_SWDE_DIR)
 
-    df = pd.concat({
+    df_agg = pd.concat({
         key: pd.DataFrame({
             vertical: pd.Series(get_precision_recall_f1(ground_truth, predictions), index=['P', 'R', 'F1'])
             for vertical, predictions in data.items()
         }).T
         for key, data in results.items()
-    }).swaplevel().sort_index()
+    }).swaplevel().sort_index(ascending=[True, False])
 
-    print_latex_table(df, 'Comparison between our own model and WebKE on the Expanded SWDE dataset.',
-                      'table:webke_comparison_expanded_swde')
+    df_per_doc = pd.concat({
+        key: pd.DataFrame({
+            (vertical, doc_id): pd.Series(get_precision_recall_f1(ground_truth, {doc_id: doc_predictions}),
+                                          index=['P', 'R', 'F1'])
+            for vertical, predictions in data.items()
+            for doc_id, doc_predictions in predictions.items()
+        }).T
+        for key, data in results.items()
+    }).sort_index()
+    df_per_doc.index.names = ['Model', 'vertical', 'doc_id']
+
+    significances = pd.concat({
+        baseline: perform_significance_test(df_per_doc, baseline, p_value=0.01, group_by=['vertical'])
+        for baseline in ['WebKE', 'Ours']
+    })
+
+    print(significances.sort_index(ascending=[False, True, False]))
+
+    print_latex_table(df_agg.style.format_index('\\texttt{{{}}}', level=0),
+                      'Comparison between our own model and WebKE on the Expanded SWDE dataset.',
+                      'table:webke_comparison_expanded_swde',
+                      highlight_axis='index')
 
 
 def main():

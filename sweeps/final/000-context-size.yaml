@@ -1,12 +1,12 @@
 program: train.py
 method: grid
-name: optimal-context-size
+name: context-size
 project: information_extraction
 description: Finds the context size out of 128, 256 and 512 that maximises performance.
 
 parameters:
   run_name:
-    value: "optimal-context-size-{context_size}"
+    value: "context-size-{context_size}-{vertical}"
   model:
     value: bert
   vertical:
@@ -29,7 +29,7 @@ parameters:
   remove_null:
     value: false
   monitor_metric:
-    value: "document/global/f1"
+    value: "document/instance/f1"
   learning_rate:
     value: 0.00005
   optimizer:

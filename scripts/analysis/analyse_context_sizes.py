@@ -4,18 +4,23 @@ from typing import Dict
 import pandas as pd
 
 from information_extraction.analysis.tables import get_wandb_tables, print_latex_table, aggregate_tables
-from information_extraction.evaluation import Evaluator
-from information_extraction.data.metrics import compute_f1, compute_exact
+from information_extraction.analysis.stats import perform_aggregation_and_significance_tests
+from information_extraction.evaluation import get_evaluator, Evaluator
 from information_extraction.data import DOMAINS
-from information_extraction.config import DATA_DIR
 
-SWEEPS = ['vs2mdrqr', '1tsqaudj']
+SWEEP_ID = 'sf86fzh8'
 
 
-def print_context_summary(evaluator, tables):
+def print_context_summary(evaluator: Evaluator, tables: Dict[str, pd.DataFrame]):
+    tables = {**tables, 'context-size-Ensemble': pd.concat(combine_context_tables(tables).values())}
+
     df_agg = aggregate_tables(evaluator, tables, run_name_parts=[2])
-    df_agg.loc['Combined'] = aggregate_tables(evaluator, combine_context_tables(tables))
     df_agg.index.name = 'Context size'
+
+    significances = perform_aggregation_and_significance_tests(evaluator, tables, baselines=['128', '256'],
+                                                               p_value=0.01, run_name_parts=[2])
+
+    print(significances)
 
     df = df_agg.style.format_index(lambda s: s.upper(), axis='columns', level=1)
     print_latex_table(df, caption='Performance of a BERT model for different context sizes',
@@ -28,7 +33,8 @@ def print_context_performance_per_attribute(evaluator: Evaluator, tables: Dict[s
     df_agg.index.names = ['Vertical', 'Attribute']
     df_agg.columns = pd.MultiIndex.from_product([['Context size'], df_agg.columns])
 
-    full_table = df_agg.style.format_index(lambda s: s.capitalize(), level=0).format_index('\\verb|{}|', level=1)
+    table = df_agg.style.format_index(lambda s: 'NBA player' if s == 'nbaplayer' else s.capitalize(), level=0)
+    table = table.format_index('\\verb|{}|', level=1)
 
     caption = (
         'Performance of a BERT model for different context sizes. '
@@ -36,14 +42,15 @@ def print_context_performance_per_attribute(evaluator: Evaluator, tables: Dict[s
         'The best performing context size for a given attribute is marked in bold.'
     )
 
-    print_latex_table(full_table, caption=caption, label='table:context_sizes_per_attribute', highlight_axis='columns')
+    print_latex_table(table, caption=caption, label='table:context_sizes_per_attribute', highlight_axis='columns',
+                      long_table=True)
 
 
-def combine_context_tables(tables):
+def combine_context_tables(tables: Dict[str, pd.DataFrame]):
     per_vertical = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
     for run_name, table in tables.items():
-        _, vertical, context_size = run_name.split('-')
+        _, _, context_size, vertical = run_name.split('-')
 
         for _, row in table.iterrows():
             for attribute in DOMAINS[vertical]:
@@ -73,12 +80,9 @@ def combine_context_tables(tables):
 
 
 def main():
-    tables = {}
+    tables = get_wandb_tables(SWEEP_ID)
 
-    for sweep_id in SWEEPS:
-        tables.update(get_wandb_tables(sweep_id))
-
-    evaluator = Evaluator({'f1': compute_f1, 'em': compute_exact})
+    evaluator = get_evaluator()
 
     print_context_summary(evaluator, tables)
     print_context_performance_per_attribute(evaluator, tables)

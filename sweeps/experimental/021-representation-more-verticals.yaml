@@ -1,12 +1,12 @@
 program: try_html_representation.py
 method: grid
-name: representation
+name: representation-more-verticals
 project: information_extraction
-description: Comparison between different representations for BERT
+description: Comparison between different representations for BERT, for more verticals
 
 parameters:
   run_name:
-    value: "representation-{representation}"
+    value: "representation-{vertical}-{representation}"
   model:
     value: bert
   representation:
@@ -17,21 +17,20 @@ parameters:
     - html-id
     - html-class
     - html-id-class
-    - html-id-class-subset
     - html-id-expanded
-    - html-class-expanded
     - html-id-class-expanded
-    - html-id-class-expanded-subset
   context_size:
     value: 256
   parent_depth:
     value: 3
   vertical:
-    value: movie
-  remove_null:
-    value: false
+    values:
+    - nbaplayer
+    - university
   monitor_metric:
     value: "document/instance/f1"
+  remove_null:
+    value: false
   learning_rate:
     value: 0.00005
   optimizer:

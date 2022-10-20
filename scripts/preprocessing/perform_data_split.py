@@ -1,10 +1,10 @@
 from argparse import ArgumentParser
-import json
 from pathlib import Path
 import shutil
 import tempfile
 
 from information_extraction.preprocessing.data_split import get_random_split, get_webke_split, get_zero_shot_split
+from information_extraction.analysis.mappings import WEBKE_SPLIT_MAPPING
 from information_extraction.config import WANDB_PROJECT, DATA_DIR
 
 import wandb
@@ -32,10 +32,7 @@ def main(input_artifact: str, split_mode: str, train_size: float):
         if split_mode == 'random':
             split = get_random_split(input_dir, train_size)
         elif split_mode == 'webke':
-            with open('webke_split_mapping.json') as _file:
-                webke_split_mapping = json.load(_file)
-
-            split = get_webke_split(webke_split_mapping, train_size)
+            split = get_webke_split(WEBKE_SPLIT_MAPPING, train_size)
         elif split_mode == 'zero-shot':
             split = get_zero_shot_split(input_dir, train_size)
         else:

@@ -10,10 +10,12 @@ import wandb
 
 from information_extraction.evaluation import Evaluator
 from information_extraction.data import DOMAINS
+from information_extraction.dtypes import PathLike
 from information_extraction.config import DATA_DIR, WANDB_PROJECT
 
 
 DEFAULT_TABLES_ROOT = DATA_DIR / 'Tables'
+DEFAULT_ARTIFACT_DIR = DATA_DIR / 'Artifacts'
 
 
 def get_wandb_tables(sweep_id: str, tables_root: Optional[Union[str, Path]] = None,
@@ -26,11 +28,19 @@ def get_wandb_tables(sweep_id: str, tables_root: Optional[Union[str, Path]] = No
     tables_dir = tables_root / sweep_id / table_type
 
     if os.path.exists(tables_dir):
-        return {
-            filename[:-4]: pd.read_csv(tables_dir / filename).fillna('')
-            for filename in os.listdir(tables_dir)
-            if filename.endswith('.csv')
-        }
+        dfs = {}
+
+        for filename in os.listdir(tables_dir):
+            if filename.endswith('.csv'):
+                df = pd.read_csv(tables_dir / filename, dtype=str).fillna('')
+
+                for col in df.columns:
+                    if col.endswith('f1') or col.endswith('em') or col.endswith('conf') or col.endswith('score'):
+                        df[col] = pd.to_numeric(df[col])
+
+                dfs[filename[:-4]] = df
+
+        return dfs
 
     os.makedirs(tables_dir)
 
@@ -55,8 +65,27 @@ def get_wandb_tables(sweep_id: str, tables_root: Optional[Union[str, Path]] = No
     return dfs
 
 
+def get_wandb_artifact(artifact_name: str, version: str = 'latest',
+                       target_dir: Optional[PathLike] = None) -> Path:
+    if target_dir is None:
+        target_dir = DEFAULT_ARTIFACT_DIR / f'{artifact_name}-{version}'
+
+    artifact_identifier = f'{WANDB_PROJECT}/{artifact_name}:{version}'
+
+    if wandb.run is None:
+        api = wandb.Api()
+        artifact = api.artifact(artifact_identifier)
+    else:
+        artifact = wandb.use_artifact(artifact_identifier)
+
+    artifact.download(root=str(target_dir))
+
+    return target_dir
+
+
 def print_latex_table(table: Union[pd.DataFrame, Styler], caption: str, label: str,
-                      highlight_axis: Optional[str] = None, format_float: bool = True):
+                      highlight_axis: Optional[str] = None, format_float: bool = True,
+                      long_table: bool = False):
     if isinstance(table, pd.DataFrame):
         formatted = table.style
     else:
@@ -66,15 +95,21 @@ def print_latex_table(table: Union[pd.DataFrame, Styler], caption: str, label: s
         formatted = formatted.format(precision=2)
 
     if highlight_axis is not None:
-        formatted = formatted.highlight_max(axis=highlight_axis, props='textbf:--rwrap;')
+        formatted = formatted.highlight_max(axis=highlight_axis, props='bfseries: ;')
 
-    print(formatted.to_latex(multicol_align='c', caption=caption, label=label, position_float='centering',
-                             hrules=True, clines='skip-last;data'))
+    formatted = formatted.format_index(lambda s: '$F_1$' if s.lower() == 'f1' else s, axis='columns')
+
+    environment = 'longtable' if long_table else None
+    position_float = None if long_table else 'centering'
+
+    print(formatted.to_latex(multicol_align='c', caption=caption, label=label, position_float=position_float,
+                             hrules=True, clines='skip-last;data', environment=environment))
 
 
 def aggregate_tables(
-    evaluator: Evaluator, tables: dict[str, pd.DataFrame], run_name_parts: Optional[List[int]] = None,
-    per_vertical: bool = False, per_website: bool = False, per_attribute: bool = False
+    evaluator: Evaluator, tables: Dict[str, pd.DataFrame], run_name_parts: Optional[List[int]] = None,
+    per_vertical: bool = False, per_website: bool = False, per_attribute: bool = False, per_document: bool = False,
+    subset: Optional[List[Dict[str, str]]] = None
 ) -> Union[pd.Series, pd.DataFrame]:
 
     group_values = []
@@ -87,11 +122,13 @@ def aggregate_tables(
         group_values.append('website')
     if per_attribute:
         group_values.append('attribute')
+    if per_document:
+        group_values.append('doc_id')
 
     rows = []
     for run_name, table in tables.items():
         table = table.copy()
-        table[['vertical', 'website', 'doc_id']] = table['doc_id'].str.split('/', expand=True)
+        table[['vertical', 'website', '_doc_id']] = table['doc_id'].str.split('/', expand=True)
 
         row_base = {
             f'run_name_{i}': part
@@ -107,13 +144,16 @@ def aggregate_tables(
                     **row_base,
                     'vertical': row['vertical'],
                     'website': row['website'],
+                    'doc_id': row['doc_id'],
                     'attribute': attribute,
                 }
 
                 for field in ['true', 'pred', 'em', 'f1']:
                     new_row[f'result/{field}'] = row[f'{attribute}/{field}']
 
-                rows.append(new_row)
+                if subset is None or any(all(new_row[key] == value for key, value in condition.items())
+                                         for condition in subset):
+                    rows.append(new_row)
 
     df = pd.DataFrame(rows)
 
@@ -130,6 +170,7 @@ def aggregate_tables(
 
     if len(group_values) > 1:
         df.index = pd.MultiIndex.from_tuples(df.index)
+    df.index.names = group_values
 
     df.columns = pd.MultiIndex.from_tuples(df.columns)
 

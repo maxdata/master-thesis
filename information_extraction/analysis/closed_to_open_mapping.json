@@ -1,0 +1,233 @@
+{
+    "movie": {
+        "allmovie": {
+            "director": [
+                "Director"
+            ],
+            "genre": [
+                "Genres"
+            ],
+            "mpaa_rating": [
+                "MPAA Rating"
+            ],
+            "title": null
+        },
+        "amctv": {
+            "director": [
+                "Director:"
+            ],
+            "genre": [
+                "Genre/Type:"
+            ],
+            "mpaa_rating": [
+                "MPAA Rating:"
+            ],
+            "title": null
+        },
+        "hollywood": {
+            "director": [
+                "Director"
+            ],
+            "genre": null,
+            "mpaa_rating": null,
+            "title": null
+        },
+        "iheartmovies": {
+            "director": [
+                "Directed by"
+            ],
+            "genre": [
+                "Genres"
+            ],
+            "mpaa_rating": [
+                "MPAA Rating"
+            ],
+            "title": null
+        },
+        "imdb": {
+            "director": [
+                "Director:",
+                "Directors:"
+            ],
+            "genre": [
+                "Genres:"
+            ],
+            "mpaa_rating": [
+                "Motion Picture Rating"
+            ],
+            "title": null
+        },
+        "metacritic": {
+            "director": [
+                "Director:"
+            ],
+            "genre": [
+                "Genre(s):"
+            ],
+            "mpaa_rating": [
+                "Rating:"
+            ],
+            "title": null
+        },
+        "rottentomatoes": {
+            "director": [
+                "Directed By:"
+            ],
+            "genre": [
+                "Genre:"
+            ],
+            "mpaa_rating": [
+                "Rated:"
+            ],
+            "title": null
+        },
+        "yahoo": {
+            "director": [
+                "Directed by:"
+            ],
+            "genre": [
+                "Genres:"
+            ],
+            "mpaa_rating": [
+                "MPAA Rating:"
+            ],
+            "title": null
+        }
+    },
+    "nbaplayer": {
+        "fanhouse": {
+            "height": [
+                "Height"
+            ],
+            "name": null,
+            "team": [
+                "Team"
+            ],
+            "weight": [
+                "Weight"
+            ]
+        },
+        "foxsports": {
+            "height": [
+                "Ht"
+            ],
+            "name": null,
+            "team": null,
+            "weight": [
+                "Wt"
+            ]
+        },
+        "espn": {
+            "height": [
+                "Height"
+            ],
+            "name": null,
+            "team": null,
+            "weight": [
+                "Weight"
+            ]
+        },
+        "msnca": {
+            "height": [
+                "Height:"
+            ],
+            "name": null,
+            "team": [
+                "Team:"
+            ],
+            "weight": [
+                "Weight:"
+            ]
+        },
+        "si": {
+            "height": [
+                "Height:"
+            ],
+            "name": null,
+            "team": null,
+            "weight": [
+                "Weight:"
+            ]
+        },
+        "slam": {
+            "height": [
+                "Height"
+            ],
+            "name": null,
+            "team": null,
+            "weight": [
+                "Weight"
+            ]
+        },
+        "usatoday": {
+            "height": [
+                "Height:"
+            ],
+            "name": null,
+            "team": null,
+            "weight": [
+                "Weight:"
+            ]
+        },
+        "yahoo": {
+            "height": [
+                "Height"
+            ],
+            "name": null,
+            "team": null,
+            "weight": [
+                "Weight"
+            ]
+        }
+    },
+    "university": {
+        "collegeprowler": {
+            "name": null,
+            "phone": null,
+            "website": null,
+            "type": [
+                "Control:"
+            ]
+        },
+        "ecampustours": {
+            "name": null,
+            "phone": null,
+            "website": null,
+            "type": [
+                "Affiliation"
+            ]
+        },
+        "embark": {
+            "name": null,
+            "phone": [
+                "Phone:"
+            ],
+            "website": null,
+            "type": [
+                "School Type:"
+            ]
+        },
+        "matchcollege": {
+            "name": null,
+            "phone": [
+                "General Phone:"
+            ],
+            "website": [
+                "Website"
+            ],
+            "type": [
+                "Type:"
+            ]
+        },
+        "usnews": {
+            "name": null,
+            "phone": null,
+            "website": [
+                "Web site:"
+            ],
+            "type": [
+                "Institutional Control:"
+            ]
+        }
+    }
+}

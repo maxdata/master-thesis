@@ -18,7 +18,6 @@ def set_worker_sharing_strategy(worker_id: int) -> None:
     torch.multiprocessing.set_sharing_strategy(sharing_strategy)
 
 
-# TODO: used in multiple places, move to a shared definition
 PathLike = Union[str, Path]
 
 

@@ -1,9 +1,12 @@
 from collections import namedtuple
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 import torch
+
+PathLike = Union[str, Path]
 
 T5Batch = namedtuple('T5Batch', ['docs', 'inputs', 'targets', 'features',
                                  'input_ids', 'attention_mask', 'decoder_input_ids',

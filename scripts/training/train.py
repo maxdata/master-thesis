@@ -19,7 +19,7 @@ def perform_evaluation(trainer: BaseTrainer, dataset: SWDEDataModule, config: wa
     evaluator = Evaluator(metrics={'f1': compute_f1, 'em': compute_exact})
 
     for split in config.get('evaluation_datasets', ['train', 'val', 'test']):
-        dataloader = tqdm(eval_loaders[split](), desc=f'Evaluating {split}', leave=False)
+        dataloader = tqdm(eval_loaders[split](), desc=f'Evaluating {split}')
         predictions = trainer.predict_documents(dataloader, method=config.get('evaluation_method', 'greedy'))
         results = evaluator.evaluate_documents(predictions)
 

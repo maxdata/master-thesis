@@ -1,10 +1,8 @@
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
-from information_extraction.dtypes import EvaluationResult
+from information_extraction.dtypes import EvaluationResult, PathLike
 from .base import BaseCallback
-
-PathLike = Union[str, Path]
 
 
 class SavePredictions(BaseCallback):
