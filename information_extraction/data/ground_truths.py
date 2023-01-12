@@ -23,9 +23,7 @@ class GroundTruths:
         ground_truths = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
 
         for ground_truth_file in ground_truth_dir.glob('*/*.txt'):
-            with open(ground_truth_file) as _file:
-                input_data = _file.read()
-
+            input_data = Path(ground_truth_file).read_text()
             domain, website, attribute = ground_truth_file.stem.split('-')
 
             for doc_id, values in self.parse_ground_truth_file(input_data).items():

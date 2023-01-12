@@ -8,8 +8,8 @@ def get_precision_recall_f1(y_true: Dict[str, List[Tuple[str, str]]],
     tp = tpfp = tpfn = 0
 
     for doc_id, predictions in y_pred.items():
-        a_pred = set((label, normalize_answer(value)) for label, value in predictions)
-        a_true = set((label, normalize_answer(value)) for label, value in y_true[doc_id])
+        a_pred = {(label, normalize_answer(value)) for label, value in predictions}
+        a_true = {(label, normalize_answer(value)) for label, value in y_true[doc_id]}
 
         tp += len(a_true & a_pred)
         tpfp += len(a_pred)

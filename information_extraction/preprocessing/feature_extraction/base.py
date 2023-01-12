@@ -123,9 +123,7 @@ class BaseExtractor(ABC):
         return extracted_features
 
     def get_features_from_file(self, filename: str, ground_truth: dict) -> List[dict]:
-        with open(filename) as _file:
-            html = _file.read()
-
+        html = Path(filename).read_text()
         cleaned_html = self.clean_html(html)
 
         tree = lxml.html.parse(StringIO(cleaned_html))

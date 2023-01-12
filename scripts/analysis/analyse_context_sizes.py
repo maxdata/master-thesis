@@ -68,9 +68,10 @@ def combine_context_tables(tables: Dict[str, pd.DataFrame]):
 
             for attribute, attribute_values in doc_entries.items():
                 best_prediction = max(attribute_values, key=lambda fields: fields['conf'])
-                new_row.update({
-                    f'{attribute}/{field}': value for field, value in best_prediction.items()
-                })
+                new_row |= {
+                    f'{attribute}/{field}': value
+                    for field, value in best_prediction.items()
+                }
 
             rows.append(new_row)
 

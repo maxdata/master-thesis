@@ -11,11 +11,7 @@ from information_extraction.config import WANDB_PROJECT, DATA_DIR
 
 
 def main(split: str, representation: str, parent_depth: Optional[int] = None, num_workers: int = 1):
-    if split == 'random':
-        slug = representation
-    else:
-        slug = f'{representation}-{split}'
-
+    slug = representation if split == 'random' else f'{representation}-{split}'
     wandb.init(
         project=WANDB_PROJECT,
         name=f'{slug}-feature-extraction',

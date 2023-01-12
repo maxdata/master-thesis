@@ -56,11 +56,8 @@ class HtmlExtractor(BaseExtractor):
         self.split_attributes = split_attributes
 
     def get_ancestor_encoding(self, elem: etree.Element, depth: int = 0) -> List[str]:
-        if depth >= self.parent_depth:
+        if depth >= self.parent_depth or elem is None:
             return []
-        elif elem is None:
-            return []
-
         ancestor_encoding = self.get_ancestor_encoding(elem.getparent(), depth=depth + 1)
 
         current_parent = [
@@ -69,10 +66,7 @@ class HtmlExtractor(BaseExtractor):
 
         if self.encode_tag_subset is None or elem.tag in self.encode_tag_subset:
             if (value := elem.get('id')) is not None and self.encode_id:
-                if self.split_attributes:
-                    parts = self.split_attribute_value(value)
-                else:
-                    parts = [value]
+                parts = self.split_attribute_value(value) if self.split_attributes else [value]
                 current_parent.extend(f'{self.parent_prefix}{depth}{self.id_suffix} {part}' for part in parts)
 
             if (value := elem.get('class')) is not None and self.encode_class:
@@ -93,13 +87,7 @@ class HtmlExtractor(BaseExtractor):
             if not text.strip():
                 continue
 
-            if text.is_text:
-                # The text is contained within the 'parent' node
-                parent = text.getparent()
-            else:
-                # The text follows the 'parent' node, so the real parent is one level up
-                parent = text.getparent().getparent()
-
+            parent = text.getparent() if text.is_text else text.getparent().getparent()
             prefix = ' '.join(self.get_ancestor_encoding(parent))
             texts.append(f'{prefix} {text.strip()}')
 
@@ -128,6 +116,6 @@ class HtmlExtractor(BaseExtractor):
         parts = {value}
 
         for transform in (split_dashes, split_camel):
-            parts = set(y for x in parts for y in transform(x) if y)
+            parts = {y for x in parts for y in transform(x) if y}
 
         return list(parts)

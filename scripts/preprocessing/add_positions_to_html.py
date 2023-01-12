@@ -52,7 +52,7 @@ class SeleniumProcess(Process):
         if output_file.exists():
             return
 
-        url = 'file://' + str((self.input_dir / filename).absolute())
+        url = f'file://{str((self.input_dir / filename).absolute())}'
 
         try:
             driver.get(url)

@@ -46,7 +46,4 @@ class SegmentSampler(Sampler[int]):
             yield from self.single_iteration()
 
     def __len__(self) -> int:
-        if self.num_samples is None:
-            return sys.maxsize
-        else:
-            return self.num_samples
+        return sys.maxsize if self.num_samples is None else self.num_samples
