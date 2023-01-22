@@ -34,10 +34,7 @@ def perform_significance_test(df: pd.DataFrame, baseline: str, p_value: Optional
 
     p_values = pd.DataFrame(rows)
 
-    if p_value is None:
-        return p_values
-    else:
-        return p_values < p_value
+    return p_values if p_value is None else p_values < p_value
 
 
 def perform_aggregation_and_significance_tests(evaluator: Evaluator, tables: Dict[str, pd.DataFrame],
@@ -59,12 +56,16 @@ def perform_aggregation_and_significance_tests(evaluator: Evaluator, tables: Dic
     if not isinstance(baselines, list):
         baselines = [baselines]
 
-    results = {}
-
-    for baseline in baselines:
-        results[baseline] = pd.concat({
-            metric_group: perform_significance_test(metric_df, baseline, p_value, group_by=group_by)
-            for metric_group, (metric_df, group_by) in dfs.items()
-        }, axis=1)
-
+    results = {
+        baseline: pd.concat(
+            {
+                metric_group: perform_significance_test(
+                    metric_df, baseline, p_value, group_by=group_by
+                )
+                for metric_group, (metric_df, group_by) in dfs.items()
+            },
+            axis=1,
+        )
+        for baseline in baselines
+    }
     return pd.concat(results)

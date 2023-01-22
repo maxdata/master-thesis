@@ -20,11 +20,7 @@ DEFAULT_ARTIFACT_DIR = DATA_DIR / 'Artifacts'
 
 def get_wandb_tables(sweep_id: str, tables_root: Optional[Union[str, Path]] = None,
                      table_type: str = 'documents') -> Dict[str, pd.DataFrame]:
-    if tables_root is None:
-        tables_root = DEFAULT_TABLES_ROOT
-    else:
-        tables_root = Path(tables_root)
-
+    tables_root = DEFAULT_TABLES_ROOT if tables_root is None else Path(tables_root)
     tables_dir = tables_root / sweep_id / table_type
 
     if os.path.exists(tables_dir):
@@ -86,11 +82,7 @@ def get_wandb_artifact(artifact_name: str, version: str = 'latest',
 def print_latex_table(table: Union[pd.DataFrame, Styler], caption: str, label: str,
                       highlight_axis: Optional[str] = None, format_float: bool = True,
                       long_table: bool = False):
-    if isinstance(table, pd.DataFrame):
-        formatted = table.style
-    else:
-        formatted = table
-
+    formatted = table.style if isinstance(table, pd.DataFrame) else table
     if format_float:
         formatted = formatted.format(precision=2)
 

@@ -45,18 +45,11 @@ class T5Trainer(BaseTrainer):
 
         logits = prediction.logits
         target_labels = batch.target_labels.to(self.device)
-        loss = self.loss_fn(logits.view(-1, logits.size(-1)), target_labels.flatten())
-
-        return loss
+        return self.loss_fn(logits.view(-1, logits.size(-1)), target_labels.flatten())
 
     def predict_segment_batch(self, batch: T5Batch) -> Tuple[float, SegmentPrediction]:
         with torch.no_grad():
-            if any(batch.targets):
-                loss = float(self.train_step(batch))
-            else:
-                # We cannot compute the loss over a fully empty batch, so just set it to 0
-                loss = 0
-
+            loss = float(self.train_step(batch)) if any(batch.targets) else 0
             num_beams = self.model_kwargs.get('num_beams')
             logits_processor = CopyInputLogitsProcessor(batch.input_ids.to(self.device), self.tokenizer.eos_token_id,
                                                         num_beams=num_beams)

@@ -35,7 +35,9 @@ def get_dataset(config: wandb.Config) -> SWDEDataModule:
         print('Files used for testing:', len([str(f) for f in test_files]))
     elif split_mode == 'zero_shot':
         if 'split_size' not in config or 'split_num' not in config:
-            raise ValueError(f'Cannot do zero shot split without `split_size` and `split_num` parameters!')
+            raise ValueError(
+                'Cannot do zero shot split without `split_size` and `split_num` parameters!'
+            )
 
         websites = os.listdir(data_path / 'train' / config.vertical)
         websites = websites[config.split_num * config.split_size:] + websites[:config.split_num * config.split_size]
@@ -62,13 +64,13 @@ def get_dataset(config: wandb.Config) -> SWDEDataModule:
         't5': 4 if config.context_size == 512 else 16,
     }
 
-    dataset = SWDEDataModule(MODELS[config.model]['model_version'],
-                             max_length=config.context_size,
-                             train_files=train_files,
-                             val_files=val_files,
-                             test_files=test_files,
-                             batch_size=mini_batch_sizes[config.model],
-                             num_workers=config.num_workers,
-                             remove_null=config.remove_null)
-
-    return dataset
+    return SWDEDataModule(
+        MODELS[config.model]['model_version'],
+        max_length=config.context_size,
+        train_files=train_files,
+        val_files=val_files,
+        test_files=test_files,
+        batch_size=mini_batch_sizes[config.model],
+        num_workers=config.num_workers,
+        remove_null=config.remove_null,
+    )

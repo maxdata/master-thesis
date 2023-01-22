@@ -12,13 +12,14 @@ TARGET_FILENAME = 'webke_split_mapping.json'
 
 
 def flatten_values(data):
-    return set([
+    return {
         (formatted_value, value)
         for key, values in data.items()
         for value in values
-        if (formatted_value := key.split('|')[-1].split('&&&')[0].strip()) != ''
+        if (formatted_value := key.split('|')[-1].split('&&&')[0].strip())
+        != ''
         and key != 'topic_entity_name'
-    ])
+    }
 
 
 def read_ground_truths():
@@ -51,7 +52,9 @@ def read_webke_data():
                 with open(webke_dir / vertical / split_name / filename) as _file:
                     file_data = json.load(_file)
 
-                data[vertical][split_name][doc_id] = set(tuple(entry) for entry in file_data['pred_list'])
+                data[vertical][split_name][doc_id] = {
+                    tuple(entry) for entry in file_data['pred_list']
+                }
 
     return data
 
@@ -68,7 +71,7 @@ def find_ground_truth_match(data, ground_truths):
 
 def generate_mapping(ground_truths, webke_data):
     results = defaultdict(lambda: defaultdict(dict))
-    not_mapped = dict()
+    not_mapped = {}
 
     for vertical in ['movie', 'nbaplayer', 'university']:
         for split_name, split_data in webke_data[vertical].items():

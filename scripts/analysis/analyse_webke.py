@@ -60,11 +60,11 @@ def map_webke_to_closed(data: List[Tuple[str, str]], mapping: Dict[str, str], gr
 
     for closed_label, predictions in values.items():
         result[closed_label] = {
-            'prediction': max([
+            'prediction': max(
                 (compute_f1(a_true, a_pred), a_pred)
                 for a_true in ground_truths[closed_label]
                 for a_pred in predictions
-            ])[1],
+            )[1],
             'confidence': 1,
         }
 
@@ -173,11 +173,11 @@ def get_webke_as_open():
 def get_own_as_open(sweep_id: str):
     tables = get_wandb_tables(sweep_id)
 
-    allowed_docs = set(
+    allowed_docs = {
         f'{vertical}/{website.split("-")[1].split("(")[0]}/{doc_id}'
         for vertical, mapping in WEBKE_SPLIT_MAPPING['test'].items()
         for website, doc_id in mapping.values()
-    )
+    }
 
     results = defaultdict(dict)
 

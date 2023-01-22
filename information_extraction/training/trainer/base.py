@@ -153,16 +153,15 @@ class BaseTrainer(ABC):
             predictions.extend(segment.predictions)
             scores.extend(segment.scores)
 
-        if method == 'greedy':
-            if any(predictions):
-                score, prediction = max((score, pred) for score, pred in zip(scores, predictions) if pred)
-            else:
-                score, prediction = min(zip(scores, predictions))
-                score = 1 - score
-        else:
+        if method != 'greedy':
             # TODO: implement new method
             raise ValueError(f'Prediction method `{method}` does not exist!')
 
+        if any(predictions):
+            score, prediction = max((score, pred) for score, pred in zip(scores, predictions) if pred)
+        else:
+            score, prediction = min(zip(scores, predictions))
+            score = 1 - score
         return {
             'prediction': prediction,
             'confidence': score,
